@@ -5,9 +5,6 @@
 > dashboard tracks every application through its lifecycle. Everything runs on
 > your own Mac — no cloud, no accounts, no secrets.
 
-> **Status: in development.** This README is a skeleton; sections fill in as the
-> build progresses.
-
 ---
 
 ## What it does
@@ -36,25 +33,89 @@ JobScout has three local parts:
 
 ## Install
 
-<!-- Phase 6: Homebrew → brew install python@3.12 → brew install ollama, then start.command -->
-_To be written._
+JobScout needs three things on your Mac: a Python 3.12 interpreter, Ollama (the
+local model runner), and the JobScout code itself. You install the first two once
+with Homebrew; `start.command` handles everything else.
+
+**1. Install Homebrew** (if you don't already have it). Open Terminal and follow
+the one-line command at <https://brew.sh>.
+
+**2. Install Python 3.12 and Ollama:**
+
+```bash
+brew install python@3.12
+brew install ollama
+```
+
+**3. Start Ollama** — open the Ollama app (`open -a Ollama`) or run `ollama serve`
+in a Terminal tab. Leave it running; it's the local model server.
+
+**4. Get JobScout** — download or clone this repository to a folder you'll keep,
+for example:
+
+```bash
+git clone <repo-url> ~/jobscout
+```
+
+That's the whole manual install. JobScout never auto-installs Homebrew, Python, or
+Ollama for you, and it never pipes a script from the internet into your shell.
 
 ## First run
 
-<!-- Phase 6: double-click start.command → it sets up the sandbox, runs the interview, launches the dashboard -->
-_To be written._
+Double-click **`start.command`** in the JobScout folder (or run `./start.command`
+in Terminal). On the first run it:
+
+1. checks your prerequisites and stops with a clear fix if anything's missing,
+2. builds a local Python sandbox (`.venv`) and installs the pinned dependencies,
+3. walks you through a short **interview** — who you are, the roles you want,
+   where you're searching, and your dealbreakers,
+4. recommends a local model for your Mac's RAM and offers to download it, and
+5. opens the **dashboard** in your browser.
+
+Your answers are written to two local files at the repo root — `profile.md` (your
+hand-editable judging brief) and `config.json` (model + search settings). Both are
+gitignored and never leave your machine. Nothing is uploaded anywhere.
+
+> If you'd rather not download the model during onboarding, decline the offer —
+> JobScout prints the exact `ollama pull …` command to run yourself later.
 
 ## Daily loop
 
-<!-- Phase 6: run the brain → review Potential jobs → set statuses → reject with notes -->
-_To be written._
+Once you're set up, a typical session is:
+
+1. **Make sure Ollama is running**, then **find jobs** — run the brain:
+
+   ```bash
+   .venv/bin/python brain/run.py
+   ```
+
+   It scrapes the sources, fetches each posting's full text, judges every one
+   against your profile, and publishes the good matches to your dashboard as
+   **Potential**. (Use `--dry-run` to judge without publishing, or `--top N` to
+   cap how many it judges.)
+
+2. **Open the dashboard** — double-click `start.command` (later runs skip setup
+   and go straight to the dashboard).
+
+3. **Review the Potential jobs.** As you act on each, move it along its status:
+   Potential → Applied → In conversation → Interviewing → Offer → … .
+
+4. **Reject with a note.** When a match isn't right, reject it and say why — that
+   note teaches the next brain run to down-rank similar jobs, so the matches get
+   better over time.
+
+To change your profile, model, or add a CV later, re-run onboarding:
+
+```bash
+./start.command --setup
+```
 
 ## Adding a CV later
 
 A CV is optional and can be added any time — just re-run onboarding:
 
 ```bash
-python3 onboarding/interview.py --setup
+./start.command --setup
 ```
 
 When it asks for a CV, give the path. It's copied into the repo (gitignored) and
