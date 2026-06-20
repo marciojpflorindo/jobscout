@@ -75,6 +75,19 @@ def sanitize(value, max_len=MAX_LEN):
     return s
 
 
+def sanitize_url(value, max_len=500):
+    """Sanitize a link field: only http(s) URLs survive; anything else -> ''.
+
+    Fails closed at the store (the trust boundary) instead of relying on every
+    future renderer to re-check the scheme — a stored `javascript:`/`data:` URL
+    is an XSS vector the moment one consumer forgets the guard.
+    """
+    s = sanitize(value, max_len)
+    if s and not re.match(r"(?i)^https?://", s):
+        return ""
+    return s
+
+
 def _fmt(d, mo, y):
     if 1 <= d <= 31 and 1 <= mo <= 12:
         return f"{d:02d}-{mo:02d}-{y:04d}"
@@ -141,7 +154,7 @@ def clean_row(inp):
         "Company": sanitize(inp.get("Company")),
         "Date": date,
         "Role": sanitize(inp.get("Role")),
-        "Job link": sanitize(inp.get("Job link"), 500),
+        "Job link": sanitize_url(inp.get("Job link"), 500),
         "Contact via": sanitize(inp.get("Contact via")),
         "Status": status if status in STATUSES else DEFAULT_STATUS,
         "Response date": normalize_date(inp.get("Response date")),

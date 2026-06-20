@@ -8,6 +8,7 @@ dashboard's own exclusion set, which can be cleared independently. Atomic writes
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -21,7 +22,16 @@ def _job_id(job: dict) -> str:
     url = (job.get("url") or "").strip().rstrip("/")
     if url:
         return url
-    return f"{(job.get('title') or '').lower().strip()}|{(job.get('company') or '').lower().strip()}"
+    title = (job.get("title") or "").lower().strip()
+    company = (job.get("company") or "").lower().strip()
+    if title or company:
+        return f"{title}|{company}"
+    # No URL and no title/company: hashing the whole posting keeps two distinct
+    # junk jobs from colliding on a shared empty "|" id (which would make the
+    # second look already-scored and silently skip it). Stable across runs, so
+    # idempotency still holds.
+    blob = json.dumps(job, sort_keys=True, ensure_ascii=False, default=str)
+    return "hash:" + hashlib.sha1(blob.encode("utf-8")).hexdigest()
 
 
 def load_scored() -> dict[str, dict]:

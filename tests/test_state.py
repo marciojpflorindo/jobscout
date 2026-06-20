@@ -21,6 +21,15 @@ class TestJobId(unittest.TestCase):
         b = ST._job_id({"url": "https://x.com/1/"})
         self.assertEqual(a, b)
 
+    def test_urlless_titleless_jobs_get_distinct_ids(self):
+        # Two distinct junk jobs (no url, no title/company) must NOT share the
+        # empty "|" id, or the second would look already-scored and be skipped.
+        a = ST._job_id({"url": "", "title": "", "company": "", "description": "foo"})
+        b = ST._job_id({"url": "", "title": "", "company": "", "description": "bar"})
+        self.assertNotEqual(a, b)
+        # ...but the same junk job is still stable across runs (idempotent).
+        self.assertEqual(a, ST._job_id({"description": "foo", "title": "", "company": "", "url": ""}))
+
 
 class TestPersistence(unittest.TestCase):
     def setUp(self):

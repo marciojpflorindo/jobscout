@@ -880,9 +880,14 @@ async function submitForm(e) {
       // untouched fields means an empty "Response date" isn't re-sent, so it can't
       // clobber a date the server auto-stamps when the Status changes in the same save.
       const orig = DATA.rows[Number(id)] || {};
+      // Stale-guard each write with the row's Company (server refuses if the row
+      // moved underneath, e.g. the brain ingested mid-edit). If this save changes
+      // Company itself, later fields must expect the NEW value we just wrote.
+      let expectCompany = orig.Company || '';
       for (const field of Object.keys(payload)) {
         if (String(payload[field] ?? '') === String(orig[field] ?? '')) continue;
-        await postJSON('/api/update', { id: Number(id), field, value: payload[field] });
+        await postJSON('/api/update', { id: Number(id), field, value: payload[field], expect: expectCompany });
+        if (field === 'Company') expectCompany = String(payload[field] ?? '');
       }
       toast('Changes saved.');
     }

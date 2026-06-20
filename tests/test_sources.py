@@ -58,6 +58,15 @@ class TestDeduplicate(unittest.TestCase):
         ]
         self.assertEqual(len(SRC.deduplicate(jobs)), 2)
 
+    def test_empty_title_company_not_collapsed(self):
+        # Distinct URLs with no title/company share the empty "|" key; they must
+        # NOT collapse into the first one (that was a silent data-loss bug).
+        jobs = [
+            {"url": "https://x.com/1", "title": "", "company": ""},
+            {"url": "https://x.com/2", "title": "", "company": ""},
+        ]
+        self.assertEqual(len(SRC.deduplicate(jobs)), 2)
+
 
 class TestGracefulSkip(unittest.TestCase):
     def test_rss_unreachable_returns_empty(self):

@@ -75,13 +75,19 @@ class Handler(BaseHTTPRequestHandler):
     # --- routing ---
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if path == "/api/data":
-            return self._api_data()
-        if path == "/api/links":
-            return self._api_links()
-        if path.startswith("/api/"):
-            return self._send_json(404, {"error": "not found"})
-        return self._serve_static(path)
+        try:
+            if path == "/api/data":
+                return self._api_data()
+            if path == "/api/links":
+                return self._api_links()
+            if path.startswith("/api/"):
+                return self._send_json(404, {"error": "not found"})
+            return self._serve_static(path)
+        except S.ValidationError as e:
+            return self._send_json(400, {"error": str(e)})
+        except Exception as e:  # noqa: BLE001 — last-resort guard, logged
+            sys.stderr.write(f"{path} error: {e!r}\n")
+            return self._send_json(500, {"error": "internal error"})
 
     def do_HEAD(self):
         # Allow HEAD for static assets; APIs respond 405.

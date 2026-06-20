@@ -186,7 +186,12 @@ def collect(search, extra_rss: list[str] | None = None,
 
 
 def deduplicate(jobs: list[dict]) -> list[dict]:
-    """Drop duplicate postings by URL, then by title|company."""
+    """Drop duplicate postings by URL, then by title|company.
+
+    A posting with neither title nor company yields the empty key "|", which
+    can't identify anything — skip the key check for those so distinct URL-only
+    jobs aren't all silently collapsed into the first empty-keyed one.
+    """
     seen_urls: set[str] = set()
     seen_keys: set[str] = set()
     out: list[dict] = []
@@ -195,10 +200,11 @@ def deduplicate(jobs: list[dict]) -> list[dict]:
         key = f"{(j.get('title') or '').lower().strip()}|{(j.get('company') or '').lower().strip()}"
         if url and url in seen_urls:
             continue
-        if key in seen_keys:
+        if key != "|" and key in seen_keys:
             continue
         if url:
             seen_urls.add(url)
-        seen_keys.add(key)
+        if key != "|":
+            seen_keys.add(key)
         out.append(j)
     return out

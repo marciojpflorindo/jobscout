@@ -112,11 +112,13 @@ def parse_verdict(raw: str) -> dict | None:
     verdict = str(obj.get("verdict", "")).strip().lower()
     if verdict not in VALID_VERDICTS:
         return None
-    try:
-        score = int(round(float(obj.get("score", 0))))
-    except (TypeError, ValueError):
-        score = 0
-    score = max(0, min(100, score))
+    # Fail closed on a missing/garbage score, matching ats/scorer.parse_cv_score.
+    # A retry (3 attempts) catches a transient bad output; a model that reliably
+    # omits the score should surface as "unparseable", not publish a silent 0.
+    raw_score = obj.get("score")
+    if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+        return None
+    score = max(0, min(100, int(round(float(raw_score)))))
     disqualified = bool(obj.get("disqualified", False))
     injection_suspected = bool(obj.get("injection_suspected", False))
     why = str(obj.get("why", "")).strip()[:300]

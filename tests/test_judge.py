@@ -27,8 +27,12 @@ class TestParseVerdict(unittest.TestCase):
         self.assertEqual(J.parse_verdict('{"verdict":"maybe","score":999}')["score"], 100)
         self.assertEqual(J.parse_verdict('{"verdict":"maybe","score":-5}')["score"], 0)
 
-    def test_non_numeric_score_defaults_zero(self):
-        self.assertEqual(J.parse_verdict('{"verdict":"maybe","score":"high"}')["score"], 0)
+    def test_non_numeric_score_fails_closed(self):
+        # A non-numeric or missing score fails closed (None), matching the CV
+        # scorer — a silent 0 would publish a "maybe" the model never scored.
+        self.assertIsNone(J.parse_verdict('{"verdict":"maybe","score":"high"}'))
+        self.assertIsNone(J.parse_verdict('{"verdict":"maybe","score":true}'))
+        self.assertIsNone(J.parse_verdict('{"verdict":"maybe"}'))
 
     def test_disqualified_forces_no(self):
         v = J.parse_verdict('{"verdict":"match","score":95,"disqualified":true}')

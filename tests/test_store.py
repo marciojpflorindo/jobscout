@@ -82,6 +82,14 @@ class TestCleanRow(unittest.TestCase):
         row = S.clean_row({"Company": "Acme", "Job link": "h" * 1000})
         self.assertLessEqual(len(row["Job link"]), 500)
 
+    def test_job_link_rejects_non_http_scheme(self):
+        # Fail closed at the store: a javascript:/data: URL is an XSS vector if a
+        # renderer ever forgets to re-check the scheme.
+        for bad in ("javascript:alert(1)", "data:text/html,<script>", "file:///etc/passwd"):
+            self.assertEqual(S.clean_row({"Company": "Acme", "Job link": bad})["Job link"], "")
+        for ok in ("https://x.com/job/1", "http://x.com/job/1"):
+            self.assertEqual(S.clean_row({"Company": "Acme", "Job link": ok})["Job link"], ok)
+
 
 class TestParseCSV(unittest.TestCase):
     def test_quotes_and_embedded_newline(self):
