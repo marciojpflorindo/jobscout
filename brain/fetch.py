@@ -95,6 +95,30 @@ def fetch_url_safe(url: str, accept: str = "text/html") -> requests.Response | N
     return None  # too many redirects
 
 
+RSS_ACCEPT = ("application/rss+xml, application/atom+xml, application/xml, "
+              "text/xml, */*")
+
+
+def fetch_feed_bytes(url: str) -> bytes | None:
+    """Fetch a user-supplied RSS/Atom feed through the SSRF-guarded GET and
+    return its raw bytes, capped at MAX_PAGE_BYTES, or None on any failure.
+
+    The caller MUST parse these bytes directly and never hand the URL to the
+    feed parser: feedparser, given a URL, fetches it itself with no timeout and
+    no SSRF guard — which would defeat this whole choke point. Bytes in, parse
+    only what we already vetted.
+    """
+    resp = fetch_url_safe(url, accept=RSS_ACCEPT)
+    if resp is None:
+        return None
+    try:
+        return _read_capped(resp)
+    except requests.RequestException:
+        return None
+    finally:
+        resp.close()
+
+
 def _read_capped(resp: requests.Response) -> bytes:
     chunks: list[bytes] = []
     total = 0

@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Dashboard exclusion empty or unreachable — proceeding without it.")
 
     # 3. source + dedup
-    raw = sources.collect(conf.search)
+    raw = sources.collect(conf.search, conf.extra_rss, conf.extra_jobspy_locations)
     print(f"\nRaw results: {len(raw)}")
     if not raw:
         print("No jobs collected from any source.", file=sys.stderr)

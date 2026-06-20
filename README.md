@@ -72,8 +72,30 @@ clear `cv_path` in `config.json`).
 
 ## Advanced: extra job sources
 
-<!-- Phase 5: config block for extra RSS feeds + JobSpy locations; raw HTML boards out of scope -->
-_To be written._
+Out of the box, the brain searches Indeed + LinkedIn (via JobSpy, using your
+profile's country/city/queries) and RemoteOK. You can broaden coverage by adding
+your own sources to `config.json` (written by onboarding, gitignored). Two slots:
+
+```json
+{
+  "extra_jobspy_locations": ["Berlin, Germany", "Amsterdam, Netherlands"],
+  "extra_rss": ["https://example.com/jobs.rss", "https://another.org/feed.atom"]
+}
+```
+
+- **`extra_jobspy_locations`** — each location is searched with all of your
+  profile's queries on Indeed + LinkedIn, in addition to your main location.
+- **`extra_rss`** — RSS or Atom job feeds. Each is fetched safely (HTTPS only,
+  timeout, size cap, no internal addresses) and parsed for title/link/summary.
+
+Both are **resilient**: if a location is unsupported or a feed 404s, times out,
+or returns junk, the brain logs one warning and moves on — a bad source never
+crashes a run.
+
+**Out of scope: raw HTML job-board URLs.** Scraping an arbitrary careers page
+needs bespoke, per-site parsing that breaks whenever the site changes. JobScout
+only extends through structured sources (JobSpy locations + RSS/Atom feeds). If a
+board offers an RSS feed, use that.
 
 ## License
 

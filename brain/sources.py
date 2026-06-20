@@ -15,16 +15,20 @@ import time
 
 import requests
 
+import fetch  # SSRF-guarded fetching, reused for user-supplied RSS feeds
+
 JOBSPY_SITES = ("indeed", "linkedin")
 RESULTS_WANTED = 15
 HOURS_OLD = 168                  # one week
 JOBSPY_PAUSE = 2                 # politeness between JobSpy calls
 DESC_CAP = 2000                  # scraped teaser cap (full text fetched later)
+TITLE_CAP = 300                  # a sane title bound; junk/hostile feeds can emit huge ones
 
 REMOTEOK_API = "https://remoteok.com/api"
 API_HEADERS = {"User-Agent": "Mozilla/5.0 (JobScout; personal use)"}
 REQUEST_TIMEOUT = 15
 MAX_API_ENTRIES = 100
+MAX_RSS_ENTRIES = 100            # cap entries taken from any one user feed
 
 
 def _warn(msg: str) -> None:
@@ -34,9 +38,9 @@ def _warn(msg: str) -> None:
 def _row(source, title, company, location, url, description, date) -> dict:
     return {
         "source": source,
-        "title": str(title or "").strip(),
-        "company": str(company or "").strip(),
-        "location": str(location or "").strip() or "Unspecified",
+        "title": str(title or "").strip()[:TITLE_CAP],
+        "company": str(company or "").strip()[:TITLE_CAP],
+        "location": str(location or "").strip()[:TITLE_CAP] or "Unspecified",
         "url": str(url or "").strip(),
         "description": str(description or "")[:DESC_CAP],
         "date": str(date or "").strip(),
@@ -106,9 +110,57 @@ def scrape_remoteok() -> list[dict]:
     return out
 
 
-def collect(search) -> list[dict]:
-    """Run every default source for the profile's search settings. `search` is a
-    config.Search. Resilient: a failing source contributes [] and is skipped."""
+def scrape_extra_locations(search, locations: list[str]) -> list[dict]:
+    """Advanced config: run the profile's queries against extra JobSpy locations
+    the user listed (e.g. "Berlin, Germany", "Remote, UK"). Each query×site×
+    location is its own JobSpy call, already wrapped in try/except inside
+    `scrape_jobspy`, so one bad location logs a warning and is skipped."""
+    is_remote = search.remote_preference == "remote-only"
+    out: list[dict] = []
+    for loc in locations:
+        for query in search.queries:
+            for site in JOBSPY_SITES:
+                out += scrape_jobspy(query, site, search.country, search.city,
+                                     is_remote, location_override=loc)
+                time.sleep(JOBSPY_PAUSE)
+    return out
+
+
+def scrape_rss(feed_url: str) -> list[dict]:
+    """One user-supplied RSS/Atom feed.
+
+    Trust: the URL is user-written (trusted enough to attempt) but the host and
+    the feed body are HOSTILE. So the fetch goes through `fetch.fetch_feed_bytes`
+    (the SSRF + timeout + size-cap choke point), the parser is handed the
+    already-fetched bytes (never the URL — feedparser would otherwise fetch it
+    itself, unguarded), and every extracted field is coerced + capped via `_row`.
+    Returns [] on any error (logged); a broken feed never crashes a run.
+    """
+    out: list[dict] = []
+    try:
+        import feedparser  # lazy: only the RSS path pulls this dependency
+        print(f"  RSS: {feed_url}...", flush=True)
+        raw = fetch.fetch_feed_bytes(feed_url)
+        if not raw:
+            _warn(f"RSS feed unreachable or blocked: {feed_url}")
+            return out
+        feed = feedparser.parse(raw)
+        for entry in feed.entries[:MAX_RSS_ENTRIES]:
+            summary = entry.get("summary") or entry.get("description") or ""
+            out.append(_row(
+                "RSS", entry.get("title"), entry.get("author"), "",
+                entry.get("link"), summary,
+                entry.get("published") or entry.get("updated")))
+    except Exception as e:  # noqa: BLE001 — a bad feed is non-fatal
+        _warn(f"RSS feed failed ({feed_url}): {e}")
+    return out
+
+
+def collect(search, extra_rss: list[str] | None = None,
+            extra_jobspy_locations: list[str] | None = None) -> list[dict]:
+    """Run every source for the profile's search settings. `search` is a
+    config.Search; `extra_rss`/`extra_jobspy_locations` come from the advanced
+    config block. Resilient: a failing source contributes [] and is skipped."""
     is_remote = search.remote_preference == "remote-only"
     jobs: list[dict] = []
 
@@ -120,6 +172,16 @@ def collect(search) -> list[dict]:
 
     print("=== RemoteOK ===", flush=True)
     jobs += scrape_remoteok()
+
+    if extra_jobspy_locations:
+        print("=== Extra JobSpy locations ===", flush=True)
+        jobs += scrape_extra_locations(search, extra_jobspy_locations)
+
+    if extra_rss:
+        print("=== Extra RSS feeds ===", flush=True)
+        for feed_url in extra_rss:
+            jobs += scrape_rss(feed_url)
+
     return jobs
 
 

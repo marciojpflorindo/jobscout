@@ -6,3 +6,7 @@ beautifulsoup4==4.15.0
 # Optional CV-fit scoring (ats/): pure-Python PDF text extraction. TXT/MD/DOCX
 # CVs need no dependency — only PDF CVs use this.
 pypdf==6.13.3
+# Advanced sources (brain/): parse user-supplied RSS/Atom feeds. Robust across
+# messy real-world feeds and strips DOCTYPE/external entities (XXE-safe). Feeds
+# are always handed pre-fetched bytes, never a URL (keeps the SSRF guard).
+feedparser==6.0.12
