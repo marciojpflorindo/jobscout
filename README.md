@@ -158,6 +158,18 @@ needs bespoke, per-site parsing that breaks whenever the site changes. JobScout
 only extends through structured sources (JobSpy locations + RSS/Atom feeds). If a
 board offers an RSS feed, use that.
 
+## Running the tests
+
+The trust-boundary behavior (input validation, SSRF guards, fail-closed model
+parsing, graceful source skips) is covered by a stdlib `unittest` suite. From the
+repo root, after the first run has built `.venv`:
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+```
+
+See [`tests/README.md`](tests/README.md) for what each file covers.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Author: Márcio Florindo.
