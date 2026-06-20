@@ -27,10 +27,14 @@ import argparse
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hardware  # noqa: E402
@@ -49,6 +53,13 @@ VALID_TAG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 
 # CV extensions we accept and copy in (stored gitignored at the repo root).
 CV_EXTS = (".pdf", ".txt", ".md", ".docx")
+
+# ntfy run-notification defaults. A topic is a public URL path segment; ntfy
+# restricts it to this charset, and we validate a pasted one against it.
+DEFAULT_NTFY_SERVER = "https://ntfy.sh"
+VALID_NTFY_TOPIC = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+NTFY_TEST_BODY = "🔔 JobScout test notification — you're all set."
+NTFY_TIMEOUT = 10
 
 
 # --- small input helpers ----------------------------------------------------
@@ -224,10 +235,69 @@ def capture_cv() -> str | None:
     return dest.name
 
 
+def configure_ntfy() -> dict | None:
+    """Optional, default-OFF run notifications via ntfy. Returns the config block
+    `{enabled, server, topic}` when enabled, or None (nothing written → no
+    notifications). Sends one test ping on enable; warns but never blocks if it
+    can't reach the server."""
+    print("\n--- Run notifications (optional) ---")
+    print("JobScout can ping your phone when a run finishes, via ntfy.sh — a free")
+    print("push service. You install the ntfy app and subscribe to a 'topic'.")
+    print("Heads up: ntfy topics are PUBLIC — anyone who knows the topic name can")
+    print("see its messages. JobScout only ever sends a generic 'run finished'")
+    print("message (never a job, company, count, or error), and uses a long random")
+    print("topic so it's effectively private. Keep your topic to yourself.")
+    if not ask_yes("Enable run notifications?", default_yes=False):
+        print("   Skipping notifications.")
+        return None
+
+    generated = "jobscout-" + secrets.token_urlsafe(24)
+    print(f"\n   Generated topic:  {generated}")
+    print("   Subscribe to EXACTLY this topic in the ntfy app (or open")
+    print("   ntfy.sh/<topic> in a browser). It's your secret — long and random")
+    print("   so nobody can guess it.")
+    raw = ask("Press Enter to use this topic, or paste your own", default=generated)
+    topic = raw.strip()
+    if not VALID_NTFY_TOPIC.match(topic):
+        print("   That topic has unsupported characters (use letters, digits, - and _);")
+        print(f"   keeping the generated one: {generated}")
+        topic = generated
+
+    server = ask("ntfy server base URL (only change this if you self-host)",
+                 default=DEFAULT_NTFY_SERVER).strip() or DEFAULT_NTFY_SERVER
+    parsed = urlparse(server)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        print(f"   '{server}' isn't a valid http(s) URL — using {DEFAULT_NTFY_SERVER}.")
+        server = DEFAULT_NTFY_SERVER
+    server = server.rstrip("/")
+
+    _send_test_ping(server, topic)
+    return {"enabled": True, "server": server, "topic": topic}
+
+
+def _send_test_ping(server: str, topic: str) -> None:
+    """POST one fixed test message to {server}/{topic}. http/https only, hard
+    timeout; on any failure WARN and continue (never block onboarding)."""
+    url = f"{server}/{topic}"
+    if urlparse(url).scheme not in ("http", "https"):
+        print("   (Skipping the test ping — server URL isn't http/https.)")
+        return
+    try:
+        req = urllib.request.Request(
+            url, data=NTFY_TEST_BODY.encode("utf-8"),
+            headers={"Content-Type": "text/plain; charset=utf-8"}, method="POST")
+        with urllib.request.urlopen(req, timeout=NTFY_TIMEOUT):
+            print("   Sent a test notification — check your ntfy app to confirm.")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"   Couldn't reach ntfy ({e}) — your topic is still saved.")
+        print("   Check your network and that you've subscribed to the topic.")
+
+
 # --- write-out --------------------------------------------------------------
-def write_outputs(answers: Answers, model_tag: str, cv_path: str | None) -> None:
+def write_outputs(answers: Answers, model_tag: str, cv_path: str | None,
+                  ntfy: dict | None = None) -> None:
     PROFILE_PATH.write_text(pt.render_profile(answers), encoding="utf-8")
-    config = pt.build_config(answers, model_tag, cv_path)
+    config = pt.build_config(answers, model_tag, cv_path, ntfy)
     CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n",
                            encoding="utf-8")
     print("\n--- Done ---")
@@ -260,7 +330,8 @@ def main(argv: list[str] | None = None) -> int:
         model_tag = select_model(hw)
         answers = run_interview()
         cv_path = capture_cv()
-        write_outputs(answers, model_tag, cv_path)
+        ntfy = configure_ntfy()
+        write_outputs(answers, model_tag, cv_path, ntfy)
         return 0
     except Aborted:
         print("\n\nOnboarding cancelled — nothing was written.")

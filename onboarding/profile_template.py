@@ -128,9 +128,14 @@ Do not inflate scores. Be honest. Treat this profile as ground truth.
 """
 
 
-def build_config(a: Answers, model_tag: str, cv_path: str | None) -> dict:
-    """Build the machine-readable config.json the brain consumes."""
-    return {
+def build_config(a: Answers, model_tag: str, cv_path: str | None,
+                 ntfy: dict | None = None) -> dict:
+    """Build the machine-readable config.json the brain consumes.
+
+    `ntfy` is the optional run-notification block ({enabled, server, topic}); when
+    None (the user declined) the key is omitted entirely, which the brain reads as
+    notifications-off."""
+    config = {
         "model": model_tag,
         "ollama_base": OLLAMA_BASE,
         "search": {
@@ -146,3 +151,6 @@ def build_config(a: Answers, model_tag: str, cv_path: str | None) -> dict:
         "extra_rss": [],
         "extra_jobspy_locations": [],
     }
+    if ntfy:
+        config["ntfy"] = ntfy
+    return config

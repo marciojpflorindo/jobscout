@@ -13,8 +13,10 @@ pipeline deep inside a scrape.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.json"
@@ -24,6 +26,12 @@ STATE_DIR = Path(__file__).resolve().parent / "state"
 DEFAULT_OLLAMA_BASE = "http://127.0.0.1:11434"
 DEFAULT_DASHBOARD_PORT = 8765
 VALID_REMOTE_PREFS = ("remote-only", "hybrid-ok", "on-site")
+
+DEFAULT_NTFY_SERVER = "https://ntfy.sh"
+# An ntfy topic is a URL path segment; ntfy itself restricts it to this charset.
+# Validating here means a malformed topic fails closed (notifications disabled)
+# rather than producing a surprising POST target.
+VALID_NTFY_TOPIC = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
 
 class ConfigError(RuntimeError):
@@ -40,6 +48,16 @@ class Search:
 
 
 @dataclass
+class Ntfy:
+    """Resolved run-notification settings. Only ever constructed when the config
+    block is present, enabled, and valid — so the brain can treat `Config.ntfy is
+    not None` as 'notifications are on and safe to POST'."""
+    server: str
+    topic: str
+    enabled: bool = True
+
+
+@dataclass
 class Config:
     model: str
     ollama_base: str
@@ -49,6 +67,7 @@ class Config:
     extra_rss: list[str]
     extra_jobspy_locations: list[str]
     profile_text: str
+    ntfy: Ntfy | None = None
 
     @property
     def dashboard_base(self) -> str:
@@ -59,6 +78,22 @@ def _str_list(raw) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [str(x).strip() for x in raw if isinstance(x, (str, int, float)) and str(x).strip()]
+
+
+def parse_ntfy(raw) -> Ntfy | None:
+    """Validate the optional `ntfy` block. Fails closed: a missing block, an
+    explicit `enabled: false`, a bad topic, or a non-http(s) server all return
+    None (no notifications), so the brain never POSTs to a surprising target."""
+    if not isinstance(raw, dict) or not bool(raw.get("enabled", False)):
+        return None
+    topic = str(raw.get("topic") or "").strip()
+    if not VALID_NTFY_TOPIC.match(topic):
+        return None
+    server = str(raw.get("server") or "").strip() or DEFAULT_NTFY_SERVER
+    parsed = urlparse(server)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+    return Ntfy(server=server.rstrip("/"), topic=topic, enabled=True)
 
 
 def load() -> Config:
@@ -117,4 +152,5 @@ def load() -> Config:
         extra_rss=_str_list(raw.get("extra_rss")),
         extra_jobspy_locations=_str_list(raw.get("extra_jobspy_locations")),
         profile_text=profile_text,
+        ntfy=parse_ntfy(raw.get("ntfy")),
     )

@@ -14,12 +14,13 @@ What's covered (the trust-boundary / fail-closed behavior, not the happy path):
 | File | Module(s) | Focus |
 |---|---|---|
 | `test_store.py` | `dashboard/store.py` | status allowlist, CSV formula-injection guard, date normalization, CSV re-validation, JSON-store corrupt-file recovery + abort-on-error |
-| `test_judge.py` | `brain/judge.py` | hostile model output fails closed; score clamp; `disqualified` forces `no`; rejection-pattern prompt block |
+| `test_judge.py` | `brain/judge.py` | hostile model output fails closed; score clamp; `disqualified` forces `no`; rejection-pattern prompt block; injection-flag surfaces (never changes verdict/score); posting fenced + can't escape the fence |
+| `test_notify.py` | `brain/config.py`, `brain/notify.py` | `ntfy` config parses + fails closed (bad topic/non-http server); self-hosted LAN server allowed; only three fixed generic templates; disabled/None = silent no-op |
 | `test_fetch.py` | `brain/fetch.py` | SSRF host guard (loopback/private/metadata/unresolvable); scheme guard; no network touched |
 | `test_sources.py` | `brain/sources.py`, `brain/config.py` | dedup, field caps, graceful per-source skip (RSS + JobSpy), RSS parses pre-fetched bytes |
 | `test_state.py` | `brain/state.py` | stable job ids, corrupt-ledger recovery, save/load round-trip |
 | `test_heuristic.py` | `brain/heuristic.py` | keyword scoring + threshold ranking |
-| `test_onboarding.py` | `onboarding/models.py`, `onboarding/profile_template.py` | RAM→model recommendation; deterministic profile/config rendering |
+| `test_onboarding.py` | `onboarding/models.py`, `onboarding/profile_template.py` | RAM→model recommendation; deterministic profile/config rendering; optional `ntfy` block included/omitted |
 | `test_ats.py` | `ats/cv.py`, `ats/scorer.py` | CV extraction + quality gate (md/txt/docx, oversize, binary, bad zip); score parser fail-closed |
 
 `pathsetup.py` puts the component directories on `sys.path` so the tests import

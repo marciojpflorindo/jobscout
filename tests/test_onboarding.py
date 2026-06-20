@@ -79,6 +79,15 @@ class TestBuildConfig(unittest.TestCase):
         cfg = PT.build_config(PT.Answers(search_terms=["x"]), "m", None)
         self.assertIsNone(cfg["cv_path"])
 
+    def test_no_ntfy_key_when_omitted(self):
+        cfg = PT.build_config(PT.Answers(search_terms=["x"]), "m", None)
+        self.assertNotIn("ntfy", cfg)
+
+    def test_ntfy_block_included_when_given(self):
+        block = {"enabled": True, "server": "https://ntfy.sh", "topic": "jobscout-abc"}
+        cfg = PT.build_config(PT.Answers(search_terms=["x"]), "m", None, block)
+        self.assertEqual(cfg["ntfy"], block)
+
 
 if __name__ == "__main__":
     unittest.main()

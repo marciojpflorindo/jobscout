@@ -69,8 +69,10 @@ in Terminal). On the first run it:
 2. builds a local Python sandbox (`.venv`) and installs the pinned dependencies,
 3. walks you through a short **interview** — who you are, the roles you want,
    where you're searching, and your dealbreakers,
-4. recommends a local model for your Mac's RAM and offers to download it, and
-5. opens the **dashboard** in your browser.
+4. recommends a local model for your Mac's RAM and offers to download it,
+5. optionally sets up **phone notifications** when a run finishes (off by
+   default — see [Run notifications](#run-notifications)), and
+6. opens the **dashboard** in your browser.
 
 Your answers are written to two local files at the repo root — `profile.md` (your
 hand-editable judging brief) and `config.json` (model + search settings). Both are
@@ -104,6 +106,9 @@ Once you're set up, a typical session is:
    note teaches the next brain run to down-rank similar jobs, so the matches get
    better over time.
 
+> Don't want to watch the terminal? Turn on [run notifications](#run-notifications)
+> and JobScout pings your phone when each run finishes.
+
 To change your profile, model, or add a CV later, re-run onboarding:
 
 ```bash
@@ -130,6 +135,29 @@ normally. For the best scores, supply a Markdown or DOCX CV.
 
 To turn CV-fit scoring back off, re-run onboarding and leave the CV blank (or
 clear `cv_path` in `config.json`).
+
+## Run notifications
+
+A brain run can take a while, so JobScout can ping your phone when one finishes —
+via [ntfy](https://ntfy.sh), a free push service. It's **off by default**;
+onboarding asks if you want it.
+
+If you enable it:
+
+1. JobScout generates a long, random **topic** (e.g. `jobscout-x7Qa…`) and shows it.
+2. Install the **ntfy** app (iOS/Android) — or open `ntfy.sh/<topic>` in a
+   browser — and **subscribe to exactly that topic**.
+3. Onboarding sends a test notification so you can confirm it works.
+
+After each run you'll get one of three generic messages: *new jobs to review*,
+*no new matches*, or *run failed* — that's it.
+
+> **Topics are public.** Anyone who knows your topic name can read its messages,
+> so JobScout never puts anything personal in them (no job title, company, count,
+> URL, or error text) and uses a long random topic that's effectively impossible
+> to guess. Keep your topic to yourself. Self-hosting an ntfy server? Set its URL
+> when onboarding asks. To change or disable notifications, re-run onboarding with
+> `./start.command --setup`.
 
 ## Advanced: extra job sources
 

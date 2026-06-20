@@ -33,6 +33,7 @@ import config as cfg          # noqa: E402
 import dashboard as dash      # noqa: E402
 import fetch                  # noqa: E402
 import heuristic              # noqa: E402
+import notify                 # noqa: E402
 import sources                # noqa: E402
 import state                  # noqa: E402
 from judge import Judge       # noqa: E402
@@ -58,9 +59,28 @@ def main(argv: list[str] | None = None) -> int:
     try:
         conf = cfg.load()
     except cfg.ConfigError as e:
+        # Onboarding hasn't run (or config is broken) — there is no ntfy config to
+        # notify with, so just report and exit.
         print(f"Config error: {e}", file=sys.stderr)
         return 2
 
+    # One notification at the end covers every exit: a thrown error sends the
+    # failure template, a clean finish sends new/none. `outcome` is None for a
+    # dry run (a test, nothing published — don't ping).
+    try:
+        rc, outcome = _run_pipeline(conf, args)
+    except Exception:
+        notify.notify_run(conf.ntfy, "failure")
+        raise  # keep the traceback — the failure ping says "check the terminal/log"
+    if outcome is not None:
+        notify.notify_run(conf.ntfy, outcome)
+    return rc
+
+
+def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
+    """The source -> exclude -> judge -> publish pipeline. Returns
+    (exit_code, notify_outcome) where outcome is 'new'/'none'/'failure', or None
+    when no notification should fire (a dry run)."""
     print(f"Model: {conf.model}   Dashboard: {conf.dashboard_base}")
     excl = dash.exclusion(conf.dashboard_base)
     if excl.links:
@@ -74,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nRaw results: {len(raw)}")
     if not raw:
         print("No jobs collected from any source.", file=sys.stderr)
-        return 1
+        return 1, "failure"
     jobs = sources.deduplicate(raw)
     print(f"After dedup: {len(jobs)}")
 
@@ -87,14 +107,14 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Excluded already-known/judged: {before - len(jobs)}; remaining: {len(jobs)}")
     if not jobs:
         print("Nothing new to judge.")
-        return 0
+        return 0, "none"
 
     # 5. heuristic prefilter -> top N
     candidates = heuristic.rank(jobs, conf.search.queries, args.top)
     print(f"Candidates after heuristic prefilter (top {args.top}): {len(candidates)}")
     if not candidates:
         print("No candidates cleared the heuristic prefilter.")
-        return 0
+        return 0, "none"
 
     # 6. full posting text
     print("Fetching full posting text...")
@@ -120,12 +140,18 @@ def main(argv: list[str] | None = None) -> int:
             continue
         v, sc, why = verdict["verdict"], verdict["score"], verdict["why"]
         state.record(j, v, sc, scored)
-        print(f"[{i}/{len(candidates)}] {v:5} {sc:3}  {j.get('title', '')[:50]!r}")
+        flag = " [injection?]" if verdict.get("injection_suspected") else ""
+        print(f"[{i}/{len(candidates)}] {v:5} {sc:3}{flag}  {j.get('title', '')[:50]!r}")
         if v == "no":
             rejects.append({"link": j.get("url", ""), "reason": why or "no",
                             "source": "jobscout"})
         else:
             note = f"{v} {sc}/100: {why}" if why else f"{v} {sc}/100"
+            # Prompt-injection: surface and publish anyway — never auto-drop or
+            # auto-cap (either would let a hostile posting bury or hide a job).
+            if verdict.get("injection_suspected"):
+                note += ("  |  ⚠️ This posting appears to contain text aimed at the "
+                         "scorer — treat its score with skepticism")
             if cv_scorer is not None:
                 cv = cv_scorer.score(j)
                 if cv is not None:
@@ -146,9 +172,10 @@ def main(argv: list[str] | None = None) -> int:
     # 8. publish
     if args.dry_run:
         print("Dry run — not publishing.")
-        return 0
-    _publish(conf.dashboard_base, survivors, rejects)
-    return 0
+        return 0, None  # a test run publishes nothing — don't notify
+    added = _publish(conf.dashboard_base, survivors, rejects)
+    # Binary outcome only — the body carries no count, just new-vs-none.
+    return 0, ("new" if added > 0 else "none")
 
 
 def _build_cv_scorer(conf: "cfg.Config") -> CVScorer | None:
@@ -166,12 +193,16 @@ def _build_cv_scorer(conf: "cfg.Config") -> CVScorer | None:
     return CVScorer(conf.model, conf.ollama_base, cv_text)
 
 
-def _publish(base: str, survivors: list[dict], rejects: list[dict]) -> None:
+def _publish(base: str, survivors: list[dict], rejects: list[dict]) -> int:
+    """Publish survivors + rejects. Returns the number of NEW rows the dashboard
+    actually added (after its dedup), so the caller can pick new-vs-none."""
+    added = 0
     if survivors:
         try:
             r = dash.ingest(base, survivors)
-            print(f"Published {r.get('added', 0)} (skipped {r.get('skipped', 0)} dupes).")
-        except dash.DashboardError as e:
+            added = int(r.get("added", 0) or 0)
+            print(f"Published {added} (skipped {r.get('skipped', 0)} dupes).")
+        except (dash.DashboardError, ValueError, TypeError) as e:
             print(f"! Could not publish survivors ({e}). They were judged but not added.",
                   file=sys.stderr)
     if rejects:
@@ -180,6 +211,7 @@ def _publish(base: str, survivors: list[dict], rejects: list[dict]) -> None:
             print(f"Recorded {r.get('added', 0)} reject(s) to the ledger.")
         except dash.DashboardError as e:
             print(f"! Could not record rejects ({e}).", file=sys.stderr)
+    return added
 
 
 if __name__ == "__main__":
