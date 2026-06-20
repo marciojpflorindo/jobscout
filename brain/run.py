@@ -24,7 +24,10 @@ import argparse
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_BRAIN_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.dirname(_BRAIN_DIR)
+sys.path.insert(0, _BRAIN_DIR)
+sys.path.insert(0, _REPO_ROOT)   # so `ats` (the optional CV scorer) imports as a package
 
 import config as cfg          # noqa: E402
 import dashboard as dash      # noqa: E402
@@ -33,6 +36,9 @@ import heuristic              # noqa: E402
 import sources                # noqa: E402
 import state                  # noqa: E402
 from judge import Judge       # noqa: E402
+
+from ats.cv import CVError, load_cv_text  # noqa: E402
+from ats.scorer import CVScorer           # noqa: E402
 
 DEFAULT_TOP = 30
 
@@ -100,8 +106,9 @@ def main(argv: list[str] | None = None) -> int:
             with_text += 1
     print(f"Full text fetched: {with_text}/{len(candidates)}")
 
-    # 7. judge
+    # 7. judge (+ optional CV-fit scoring of survivors)
     judge = Judge(conf.model, conf.ollama_base, conf.profile_text, excl.rejection_reasons)
+    cv_scorer = _build_cv_scorer(conf)
     survivors: list[dict] = []
     rejects: list[dict] = []
     errors = 0
@@ -119,6 +126,12 @@ def main(argv: list[str] | None = None) -> int:
                             "source": "jobscout"})
         else:
             note = f"{v} {sc}/100: {why}" if why else f"{v} {sc}/100"
+            if cv_scorer is not None:
+                cv = cv_scorer.score(j)
+                if cv is not None:
+                    note += f"  |  CV-fit {cv['score']}/100"
+                    if cv["gaps"]:
+                        note += f" (gaps: {cv['gaps']})"
             survivors.append({
                 "Company": j.get("company", ""),
                 "Role": j.get("title", ""),
@@ -136,6 +149,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     _publish(conf.dashboard_base, survivors, rejects)
     return 0
+
+
+def _build_cv_scorer(conf: "cfg.Config") -> CVScorer | None:
+    """Build the optional CV-fit scorer. Returns None (and prints one line) when
+    no CV is configured or the CV can't be read as text — the pipeline then runs
+    exactly as before, just without CV-fit notes."""
+    if not conf.cv_path:
+        return None
+    try:
+        cv_text = load_cv_text(conf.cv_path)
+    except CVError as e:
+        print(f"! CV-fit scoring off: {e}", file=sys.stderr)
+        return None
+    print(f"CV loaded ({len(cv_text)} chars) — adding a CV-fit score to each survivor.")
+    return CVScorer(conf.model, conf.ollama_base, cv_text)
 
 
 def _publish(base: str, survivors: list[dict], rejects: list[dict]) -> None:

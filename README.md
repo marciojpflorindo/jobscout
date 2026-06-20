@@ -23,7 +23,8 @@ JobScout has three local parts:
    Offer → … ). Rejecting a job with a note teaches the brain to down-rank
    similar jobs next run.
 3. **The ATS scorer** — optional. Supply a CV and each published job also gets a
-   CV-fit score.
+   CV-fit score (how well your CV's evidence matches that posting). Markdown,
+   TXT, or DOCX CVs score most reliably; born-digital PDFs work too.
 
 ## System requirements
 
@@ -50,8 +51,24 @@ _To be written._
 
 ## Adding a CV later
 
-<!-- Phase 4: re-run onboarding to attach a CV and turn on ATS scoring -->
-_To be written._
+A CV is optional and can be added any time — just re-run onboarding:
+
+```bash
+python3 onboarding/interview.py --setup
+```
+
+When it asks for a CV, give the path. It's copied into the repo (gitignored) and
+its path is saved to `config.json`. The next brain run appends a **CV-fit score**
+to every job it publishes.
+
+**Format matters.** Markdown, TXT, and DOCX read most reliably. A born-digital
+PDF (exported from Word, Google Docs, a CV builder) works too. A *scanned* PDF
+(a photo/scan of a printed CV) has no text layer — the scorer detects this,
+skips that CV with a one-line notice, and the rest of the pipeline runs
+normally. For the best scores, supply a Markdown or DOCX CV.
+
+To turn CV-fit scoring back off, re-run onboarding and leave the CV blank (or
+clear `cv_path` in `config.json`).
 
 ## Advanced: extra job sources
 

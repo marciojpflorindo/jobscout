@@ -201,6 +201,8 @@ def capture_cv() -> str | None:
     print("\n--- CV (optional) ---")
     print("Supply a CV to also get a CV-fit score on each job. You can add one")
     print("later by re-running onboarding. Leave blank to skip.")
+    print("Tip: Markdown, TXT, or DOCX score most reliably; born-digital PDFs work")
+    print("too, but a scanned/image-only PDF can't be read and won't be scored.")
     raw = ask("Path to your CV (PDF/TXT/MD/DOCX), or blank to skip")
     if not raw:
         return None
