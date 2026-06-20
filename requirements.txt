@@ -1,0 +1,2 @@
+# JobScout pinned dependencies — exact versions added as components land.
+# Populated during Phase 1 (dashboard) and Phase 3 (brain: jobspy, requests, etc.).
