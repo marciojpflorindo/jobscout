@@ -1,2 +1,5 @@
-# JobScout pinned dependencies — exact versions added as components land.
-# Populated during Phase 1 (dashboard) and Phase 3 (brain: jobspy, requests, etc.).
+# JobScout brain dependencies — pinned exact (see README for the Python 3.12 setup).
+# The dashboard and onboarding are stdlib-only; only the brain needs these.
+python-jobspy==1.1.82
+requests==2.34.2
+beautifulsoup4==4.15.0
