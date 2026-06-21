@@ -184,13 +184,18 @@ your own sources to `config.json` (written by onboarding, gitignored). Two slots
 
 ```json
 {
-  "extra_jobspy_locations": ["Berlin, Germany", "Amsterdam, Netherlands"],
+  "extra_jobspy_locations": ["Mexico", "Canada", "Berlin, Germany"],
   "extra_rss": ["https://example.com/jobs.rss", "https://another.org/feed.atom"]
 }
 ```
 
-- **`extra_jobspy_locations`** — each location is searched with all of your
-  profile's queries on Indeed + LinkedIn, in addition to your main location.
+- **`extra_jobspy_locations`** — additional countries/places to search, on top of
+  your main country. The onboarding "search more than one country?" question fills
+  this for you; you can also hand-edit it. Each entry is searched with all of your
+  profile's queries on Indeed + LinkedIn, and each gets its **own** Indeed national
+  domain — the part after the last comma, so `"Berlin, Germany"` searches Germany's
+  Indeed and a bare `"Mexico"` searches Mexico's. (RemoteOK is global-remote and
+  always included, regardless of location.)
 - **`extra_rss`** — RSS or Atom job feeds. Each is fetched safely (HTTPS only,
   timeout, size cap, no internal addresses) and parsed for title/link/summary.
 

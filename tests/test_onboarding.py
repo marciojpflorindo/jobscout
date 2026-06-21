@@ -56,6 +56,13 @@ class TestRenderProfile(unittest.TestCase):
         md = PT.render_profile(self._answers(country="Germany", city="Berlin"))
         self.assertIn("Berlin, Germany", md)
 
+    def test_extra_countries_listed_in_search_area(self):
+        # The judge must see every searched country, or it down-ranks them as
+        # "wrong location". Stripping is applied.
+        md = PT.render_profile(self._answers(
+            country="United States", extra_countries=["Mexico", " Canada "]))
+        self.assertIn("also searching Mexico, Canada", md)
+
     def test_empty_lists_render_placeholder(self):
         md = PT.render_profile(self._answers())
         self.assertIn("_(none given)_", md)
@@ -74,6 +81,11 @@ class TestBuildConfig(unittest.TestCase):
         self.assertEqual(cfg["dashboard_port"], PT.DEFAULT_DASHBOARD_PORT)
         self.assertEqual(cfg["extra_rss"], [])
         self.assertEqual(cfg["extra_jobspy_locations"], [])
+
+    def test_extra_countries_map_to_locations(self):
+        a = PT.Answers(search_terms=["x"], extra_countries=[" Mexico ", "", "Canada"])
+        cfg = PT.build_config(a, "m", None)
+        self.assertEqual(cfg["extra_jobspy_locations"], ["Mexico", "Canada"])
 
     def test_cv_path_none(self):
         cfg = PT.build_config(PT.Answers(search_terms=["x"]), "m", None)

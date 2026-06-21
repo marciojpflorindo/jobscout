@@ -115,6 +115,53 @@ class TestGracefulSkip(unittest.TestCase):
             builtins.__import__ = real_import
 
 
+class TestExtraLocations(unittest.TestCase):
+    def _capture(self, locations, queries=("eng",), country="United States"):
+        """Run scrape_extra_locations with scrape_jobspy + time.sleep stubbed,
+        returning the (country, location_override) pairs it would have scraped."""
+        import types
+        captured = []
+        orig_jobspy, orig_time = SRC.scrape_jobspy, SRC.time
+        SRC.scrape_jobspy = (lambda q, site, c, city, is_remote,
+                             location_override=None:
+                             captured.append((c, location_override)) or [])
+        SRC.time = types.SimpleNamespace(sleep=lambda *_: None)  # no real pauses
+        search = types.SimpleNamespace(remote_preference="remote-only",
+                                       queries=list(queries), country=country, city="")
+        try:
+            with quiet():
+                SRC.scrape_extra_locations(search, list(locations))
+        finally:
+            SRC.scrape_jobspy, SRC.time = orig_jobspy, orig_time
+        return captured
+
+    def test_each_entry_drives_its_own_indeed_country(self):
+        # Regression: extras used to inherit the PRIMARY country, so every extra
+        # country searched the primary country's Indeed. Each entry must drive its
+        # own Indeed domain, while the full entry is kept as the location_override.
+        captured = self._capture(["Mexico", "Berlin, Germany"])
+        self.assertEqual({c for c, _ in captured}, {"Mexico", "Germany"})
+        self.assertNotIn("United States", {c for c, _ in captured})
+        self.assertEqual({o for _, o in captured}, {"Mexico", "Berlin, Germany"})
+
+    def test_trailing_comma_and_blanks_never_leak_a_comma_country(self):
+        # Hand-edited config can hold "Mexico," or " , "; the derived country must
+        # never carry a stray comma (the old `rsplit(...) or loc` could re-add it).
+        captured = self._capture(["Mexico,", " , ", "Berlin, Germany"])
+        for c, _ in captured:
+            self.assertNotIn(",", c)
+        self.assertIn("Mexico", {c for c, _ in captured})
+
+    def test_caps_number_of_extra_locations(self):
+        # Each location multiplies into queries×sites scrape calls; a long paste
+        # must be bounded to MAX_EXTRA_LOCATIONS (one query, two sites per loc).
+        locs = [f"Country{i}" for i in range(SRC.MAX_EXTRA_LOCATIONS + 5)]
+        captured = self._capture(locs, queries=("eng",))
+        searched = {c for c, _ in captured}
+        self.assertEqual(len(searched), SRC.MAX_EXTRA_LOCATIONS)
+        self.assertNotIn(f"Country{SRC.MAX_EXTRA_LOCATIONS}", searched)
+
+
 class TestConfigDefaults(unittest.TestCase):
     """config.load is exercised indirectly elsewhere; here just the pure helper."""
     def test_str_list_filters_and_coerces(self):

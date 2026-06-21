@@ -198,7 +198,7 @@ def run_interview() -> Answers:
     print("Answers go only into local files. Nothing is uploaded.")
     print("Each question is one line — separate multiple points with commas.")
 
-    s = Stepper(11)
+    s = Stepper(12)
     a = Answers()
     a.self_description = ask(s.tag() +
         "In one line, how do you describe yourself professionally?\n"
@@ -209,13 +209,20 @@ def run_interview() -> Answers:
         "List your target roles/paths, best first (e.g. Senior Backend Engineer)")
     a.search_terms = ask_list(s.tag() +
         "Search terms to feed the job boards (e.g. backend engineer, platform engineer)")
-    a.country = ask(s.tag() + "Which country are you searching in? (e.g. Germany)")
+    a.country = ask(s.tag() +
+        "Which country do you want to find jobs in?\n"
+        "(where you'd work — not necessarily where you live now; e.g. Mexico)")
     a.city = ask(s.tag() + "City (optional — leave blank for country-wide / remote)")
+    a.extra_countries = ask_list(s.tag() +
+        "Search more than one country? Job boards search one country at a time,\n"
+        "so list any OTHER countries to search too (e.g. Canada, United States).\n"
+        "Leave blank to search just the country above.")
     a.remote_preference = ask_choice(s.tag() +
         "Remote preference:", pt.REMOTE_PREFS, default_index=0)
     a.work_auth = ask(s.tag() +
-        "Any work-authorization or location limit? "
-        "(e.g. 'EU work rights only', or blank)")
+        "Any work-authorization limit the judge should enforce on results?\n"
+        "(filters the jobs you're shown — e.g. 'US and Mexico only' — separate\n"
+        "from WHERE we search above; or blank)")
     a.exclude_companies = ask_list(s.tag() + "Companies to exclude entirely (optional)")
     a.avoid_industries = ask_list(s.tag() +
         "Industries to avoid (e.g. gambling, adtech) (optional)")

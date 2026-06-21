@@ -27,6 +27,7 @@ class Answers:
     search_terms: list[str] = field(default_factory=list)
     country: str = ""
     city: str = ""
+    extra_countries: list[str] = field(default_factory=list)
     remote_preference: str = "remote-only"
     seniority: str = ""
     work_auth: str = ""
@@ -54,6 +55,11 @@ def render_profile(a: Answers) -> str:
     location = a.country.strip() or "_(not set)_"
     if a.city.strip():
         location = f"{a.city.strip()}, {location}"
+    # Surface every searched country so the judge doesn't down-rank a job in an
+    # extra country as "wrong location" — these are deliberately in scope.
+    extras = [c.strip() for c in a.extra_countries if c.strip()]
+    if extras:
+        location = f"{location}; also searching {', '.join(extras)}"
 
     blockers = []
     if a.work_auth.strip():
@@ -149,7 +155,8 @@ def build_config(a: Answers, model_tag: str, cv_path: str | None,
         "dashboard_port": DEFAULT_DASHBOARD_PORT,
         # Advanced source slots (Phase 5); empty by default, user-extensible.
         "extra_rss": [],
-        "extra_jobspy_locations": [],
+        # Additional countries/locations to search (from onboarding or hand-edited).
+        "extra_jobspy_locations": [c.strip() for c in a.extra_countries if c.strip()],
     }
     if ntfy:
         config["ntfy"] = ntfy

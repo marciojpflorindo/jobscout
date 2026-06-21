@@ -29,6 +29,7 @@ API_HEADERS = {"User-Agent": "Mozilla/5.0 (JobScout; personal use)"}
 REQUEST_TIMEOUT = 15
 MAX_API_ENTRIES = 100
 MAX_RSS_ENTRIES = 100            # cap entries taken from any one user feed
+MAX_EXTRA_LOCATIONS = 10         # each adds queries×sites scrape calls — bound the run
 
 
 def _warn(msg: str) -> None:
@@ -111,16 +112,32 @@ def scrape_remoteok() -> list[dict]:
 
 
 def scrape_extra_locations(search, locations: list[str]) -> list[dict]:
-    """Advanced config: run the profile's queries against extra JobSpy locations
-    the user listed (e.g. "Berlin, Germany", "Remote, UK"). Each query×site×
-    location is its own JobSpy call, already wrapped in try/except inside
-    `scrape_jobspy`, so one bad location logs a warning and is skipped."""
+    """Run the profile's queries against the extra locations the user listed —
+    additional countries from onboarding (e.g. "Mexico", "Canada") or free-form
+    places from advanced config (e.g. "Berlin, Germany").
+
+    Each entry drives its OWN Indeed national domain (the part after the last
+    comma, so "Berlin, Germany" → Germany; a bare entry is the country itself) —
+    NOT the primary country. Passing the primary country was a bug: every extra
+    country then searched the primary country's Indeed instead of its own. Each
+    query×site×location is its own JobSpy call (try/except inside `scrape_jobspy`),
+    so one bad location just logs a warning and is skipped."""
     is_remote = search.remote_preference == "remote-only"
+    if len(locations) > MAX_EXTRA_LOCATIONS:
+        _warn(f"{len(locations)} extra locations given; searching only the first "
+              f"{MAX_EXTRA_LOCATIONS} (raise MAX_EXTRA_LOCATIONS to change).")
+        locations = locations[:MAX_EXTRA_LOCATIONS]
     out: list[dict] = []
     for loc in locations:
+        # Indeed's national domain comes from the entry itself, not the primary
+        # country. Take the last non-empty comma segment ("Berlin, Germany" →
+        # Germany; "Mexico," → Mexico; a bare entry is the country); never let a
+        # stray comma leak back in as the country.
+        parts = [p.strip() for p in loc.split(",") if p.strip()]
+        country = parts[-1] if parts else ""
         for query in search.queries:
             for site in JOBSPY_SITES:
-                out += scrape_jobspy(query, site, search.country, search.city,
+                out += scrape_jobspy(query, site, country, "",
                                      is_remote, location_override=loc)
                 time.sleep(JOBSPY_PAUSE)
     return out
