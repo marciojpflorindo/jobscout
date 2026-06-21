@@ -136,6 +136,31 @@ PY
     printf '%s' "$p"
 }
 
+# Is something already listening on port $1, on EITHER loopback family? Returns 0
+# (in use) / 1 (free). Run BEFORE starting our own dashboard. This catches a
+# squatter that wait_for_dashboard cannot: a server bound to IPv6 *:PORT coexists
+# with our IPv4 127.0.0.1:PORT bind, so our dashboard comes up "fine" yet the
+# browser can still land on the squatter. Checking both 127.0.0.1 and ::1 sees it.
+port_in_use() {
+    "$PYBIN" - "$1" <<'PY' 2>/dev/null
+import socket, sys
+port = int(sys.argv[1])
+def busy(family, addr):
+    try:
+        s = socket.socket(family, socket.SOCK_STREAM)
+    except OSError:
+        return False
+    s.settimeout(0.5)
+    try:
+        s.connect((addr, port)); return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+sys.exit(0 if busy(socket.AF_INET, "127.0.0.1") or busy(socket.AF_INET6, "::1") else 1)
+PY
+}
+
 # Poll until the JobScout dashboard answers on $1 with a valid /api/data payload.
 # Returns 0 once it's up, 1 after ~15s. This is primarily a liveness probe for the
 # server we just spawned; the payload-shape check also means a non-JobScout server

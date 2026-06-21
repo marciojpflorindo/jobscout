@@ -84,6 +84,16 @@ fi
 PORT="$(read_port)"
 DASH_URL="http://127.0.0.1:${PORT}/"
 
+# Pre-flight: refuse to start if the port is already taken (by any program, on
+# either loopback family). Without this, a server squatting IPv6 *:PORT coexists
+# with our IPv4 bind — the dashboard looks up, but your browser (and the brain's
+# publish) can hit the squatter instead. Caught here with a clear remedy.
+if port_in_use "$PORT"; then
+    die "Port ${PORT} is already in use by another program." \
+        "JobScout's dashboard needs it. Stop that program, or change \"dashboard_port\" in config.json to a free port." \
+        "See what's using it:  lsof -nP -iTCP:${PORT} -sTCP:LISTEN"
+fi
+
 # Start the dashboard in the background so the brain can publish to it. It stays
 # up afterwards for you to review. Always clean it up on exit.
 say ""
