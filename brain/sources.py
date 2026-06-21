@@ -29,7 +29,24 @@ API_HEADERS = {"User-Agent": "Mozilla/5.0 (JobScout; personal use)"}
 REQUEST_TIMEOUT = 15
 MAX_API_ENTRIES = 100
 MAX_RSS_ENTRIES = 100            # cap entries taken from any one user feed
-MAX_EXTRA_LOCATIONS = 10         # each adds queries×sites scrape calls — bound the run
+MAX_EXTRA_LOCATIONS = 40         # each adds queries×sites scrape calls — bound the run
+                                 # (high enough to hold an expanded region like "EU")
+
+# Region aliases: a user can type "EU" instead of listing the member countries.
+# Names match JobSpy's accepted country strings exactly (it rejects "EU" itself).
+_EU_COUNTRIES = (
+    "austria", "belgium", "bulgaria", "croatia", "cyprus", "czechia", "denmark",
+    "estonia", "finland", "france", "germany", "greece", "hungary", "ireland",
+    "italy", "latvia", "lithuania", "luxembourg", "malta", "netherlands", "poland",
+    "portugal", "romania", "slovakia", "slovenia", "spain", "sweden",
+)
+REGION_ALIASES = {
+    "eu": _EU_COUNTRIES,
+    "e.u.": _EU_COUNTRIES,
+    "european union": _EU_COUNTRIES,
+    # "Europe" goes a bit wider than the political EU (still JobSpy-valid names).
+    "europe": _EU_COUNTRIES + ("uk", "switzerland", "norway"),
+}
 
 
 def _warn(msg: str) -> None:
@@ -111,10 +128,32 @@ def scrape_remoteok() -> list[dict]:
     return out
 
 
+def expand_locations(locations: list[str]) -> list[str]:
+    """Expand region aliases ("EU" → the member countries JobSpy supports) and
+    de-duplicate case-insensitively, preserving order. Unknown entries pass
+    through unchanged — JobSpy validates them and skips any it doesn't recognise."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for entry in locations:
+        e = entry.strip()
+        if not e:
+            continue
+        expanded = REGION_ALIASES.get(e.lower())
+        if expanded is not None:
+            _warn(f"'{e}' expands to {len(expanded)} countries — this makes the "
+                  f"run longer.")
+        for loc in (expanded or (e,)):
+            key = loc.lower()
+            if key not in seen:
+                seen.add(key)
+                out.append(loc)
+    return out
+
+
 def scrape_extra_locations(search, locations: list[str]) -> list[dict]:
     """Run the profile's queries against the extra locations the user listed —
-    additional countries from onboarding (e.g. "Mexico", "Canada") or free-form
-    places from advanced config (e.g. "Berlin, Germany").
+    additional countries or a region alias from onboarding (e.g. "Mexico", "EU")
+    or free-form places from advanced config (e.g. "Berlin, Germany").
 
     Each entry drives its OWN Indeed national domain (the part after the last
     comma, so "Berlin, Germany" → Germany; a bare entry is the country itself) —
@@ -123,6 +162,7 @@ def scrape_extra_locations(search, locations: list[str]) -> list[dict]:
     query×site×location is its own JobSpy call (try/except inside `scrape_jobspy`),
     so one bad location just logs a warning and is skipped."""
     is_remote = search.remote_preference == "remote-only"
+    locations = expand_locations(locations)
     if len(locations) > MAX_EXTRA_LOCATIONS:
         _warn(f"{len(locations)} extra locations given; searching only the first "
               f"{MAX_EXTRA_LOCATIONS} (raise MAX_EXTRA_LOCATIONS to change).")

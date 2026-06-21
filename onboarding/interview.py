@@ -215,7 +215,8 @@ def run_interview() -> Answers:
     a.city = ask(s.tag() + "City (optional — leave blank for country-wide / remote)")
     a.extra_countries = ask_list(s.tag() +
         "Search more than one country? Job boards search one country at a time,\n"
-        "so list any OTHER countries to search too (e.g. Canada, United States).\n"
+        "so list any OTHER countries to search too — or the shortcut 'EU' to\n"
+        "cover its member countries (e.g. Canada, United States — or just: EU).\n"
         "Leave blank to search just the country above.")
     a.remote_preference = ask_choice(s.tag() +
         "Remote preference:", pt.REMOTE_PREFS, default_index=0)

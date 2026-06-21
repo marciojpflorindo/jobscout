@@ -152,6 +152,23 @@ class TestExtraLocations(unittest.TestCase):
             self.assertNotIn(",", c)
         self.assertIn("Mexico", {c for c, _ in captured})
 
+    def test_expands_eu_region_to_member_countries(self):
+        # JobSpy rejects "EU"; the alias must expand to its member countries.
+        captured = self._capture(["EU"])
+        searched = {c for c, _ in captured}
+        self.assertEqual(searched, set(SRC._EU_COUNTRIES))
+        self.assertNotIn("eu", searched)
+        self.assertIn("portugal", searched)
+
+    def test_region_dedups_with_explicit_entry(self):
+        # A country also covered by the region must not be searched twice.
+        captured = self._capture(["EU", "Germany"])
+        self.assertEqual({c for c, _ in captured}, set(SRC._EU_COUNTRIES))
+
+    def test_expand_locations_passthrough_and_dedup(self):
+        # Pure helper: unknown entries pass through; case-insensitive dedup; blanks drop.
+        self.assertEqual(SRC.expand_locations(["Mexico", "mexico", "  "]), ["Mexico"])
+
     def test_caps_number_of_extra_locations(self):
         # Each location multiplies into queries×sites scrape calls; a long paste
         # must be bounded to MAX_EXTRA_LOCATIONS (one query, two sites per loc).

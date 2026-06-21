@@ -195,7 +195,10 @@ your own sources to `config.json` (written by onboarding, gitignored). Two slots
   profile's queries on Indeed + LinkedIn, and each gets its **own** Indeed national
   domain — the part after the last comma, so `"Berlin, Germany"` searches Germany's
   Indeed and a bare `"Mexico"` searches Mexico's. (RemoteOK is global-remote and
-  always included, regardless of location.)
+  always included, regardless of location.) Job boards don't accept `"EU"` as a
+  place, so the shortcut **`"EU"`** (or `"Europe"`) expands to the member countries
+  they *do* accept. Heads-up: a region is many countries × your queries × two
+  boards, so it makes a run noticeably longer.
 - **`extra_rss`** — RSS or Atom job feeds. Each is fetched safely (HTTPS only,
   timeout, size cap, no internal addresses) and parsed for title/link/summary.
 
