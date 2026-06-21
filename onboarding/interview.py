@@ -67,6 +67,29 @@ class Aborted(Exception):
     """User hit Ctrl-D / Ctrl-C, or stdin closed — bail out cleanly."""
 
 
+def _bold(text: str) -> str:
+    """Bold, but only on a real terminal (no escape codes leak when piped)."""
+    return f"\033[1m{text}\033[0m" if sys.stdout.isatty() else text
+
+
+def section(title: str) -> None:
+    """A spaced, bold section header — gives the wall of prompts some structure."""
+    print(f"\n{_bold('— ' + title + ' —')}\n")
+
+
+class Stepper:
+    """Hands out '[N of TOTAL] ' tags so the user can see how far along they are.
+    Each tag starts with a blank line, so questions don't run together."""
+
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.n = 0
+
+    def tag(self) -> str:
+        self.n += 1
+        return f"\n[{self.n} of {self.total}] "
+
+
 def _input(prompt: str) -> str:
     try:
         return input(prompt)
@@ -78,17 +101,6 @@ def ask(prompt: str, default: str = "") -> str:
     hint = f" [{default}]" if default else ""
     ans = _input(f"{prompt}{hint}\n> ").strip()
     return ans or default
-
-
-def ask_multiline(prompt: str) -> str:
-    print(f"{prompt}\n(end with an empty line)")
-    lines: list[str] = []
-    while True:
-        line = _input("> ")
-        if not line.strip():
-            break
-        lines.append(line.rstrip())
-    return "\n".join(lines).strip()
 
 
 def ask_list(prompt: str) -> list[str]:
@@ -120,7 +132,7 @@ def ask_yes(prompt: str, default_yes: bool = True) -> bool:
 
 # --- hardware gate + model selection ---------------------------------------
 def report_hardware(hw: hardware.Hardware) -> None:
-    print("\n--- Checking your Mac ---")
+    section("Checking your Mac")
     if not hw.is_mac:
         print("!! JobScout targets macOS. This does not look like a Mac — "
               "you can continue, but nothing here is tested off macOS.")
@@ -145,7 +157,7 @@ def report_hardware(hw: hardware.Hardware) -> None:
 
 def select_model(hw: hardware.Hardware) -> str:
     rec = models.recommend(hw.ram_gib)
-    print("\n--- Local model ---")
+    section("Local model")
     print(f"Recommended for your Mac: {rec.label}")
     print(f"  tag: {rec.tag}  ({rec.disk_note})")
     if ask_yes("Use the recommended model?", default_yes=True):
@@ -182,36 +194,44 @@ def offer_pull(tag: str) -> None:
 
 # --- the interview ----------------------------------------------------------
 def run_interview() -> Answers:
-    print("\n--- Tell JobScout who you are and what you're after ---")
-    print("(Answers go only into local files. Nothing is uploaded.)\n")
+    section("Tell JobScout who you are and what you're after")
+    print("Answers go only into local files. Nothing is uploaded.")
+    print("Each question is one line — separate multiple points with commas.")
 
+    s = Stepper(11)
     a = Answers()
-    a.self_description = ask_multiline(
-        "How do you describe yourself professionally? (a few sentences)")
-    a.seniority = ask("What seniority are you targeting? (e.g. mid, senior, lead)")
-    a.target_paths = ask_list(
+    a.self_description = ask(s.tag() +
+        "In one line, how do you describe yourself professionally?\n"
+        "(comma-separated, e.g. senior tech writer, 10y in fintech, docs-as-code)")
+    a.seniority = ask(s.tag() +
+        "What seniority are you targeting? (e.g. mid, senior, lead)")
+    a.target_paths = ask_list(s.tag() +
         "List your target roles/paths, best first (e.g. Senior Backend Engineer)")
-    a.search_terms = ask_list(
+    a.search_terms = ask_list(s.tag() +
         "Search terms to feed the job boards (e.g. backend engineer, platform engineer)")
-    a.country = ask("Which country are you searching in? (e.g. Germany)")
-    a.city = ask("City (optional — leave blank for country-wide / remote)")
-    a.remote_preference = ask_choice(
+    a.country = ask(s.tag() + "Which country are you searching in? (e.g. Germany)")
+    a.city = ask(s.tag() + "City (optional — leave blank for country-wide / remote)")
+    a.remote_preference = ask_choice(s.tag() +
         "Remote preference:", pt.REMOTE_PREFS, default_index=0)
-    a.work_auth = ask(
+    a.work_auth = ask(s.tag() +
         "Any work-authorization or location limit? "
         "(e.g. 'EU work rights only', or blank)")
-    a.exclude_companies = ask_list("Companies to exclude entirely (optional)")
-    a.avoid_industries = ask_list("Industries to avoid (e.g. gambling, adtech) (optional)")
-    a.instant_no = ask_multiline("In your words: what makes a job an instant no?")
+    a.exclude_companies = ask_list(s.tag() + "Companies to exclude entirely (optional)")
+    a.avoid_industries = ask_list(s.tag() +
+        "Industries to avoid (e.g. gambling, adtech) (optional)")
+    a.instant_no = ask(s.tag() +
+        "What makes a job an instant no?\n"
+        "(comma-separated, e.g. on-site only, no visa sponsorship, adtech)")
     return a
 
 
 def capture_cv() -> str | None:
     """Ask for an optional CV; copy it into the repo (gitignored). Returns the
     stored relative path, or None if skipped/unusable."""
-    print("\n--- CV (optional) ---")
-    print("Supply a CV to also get a CV-fit score on each job. You can add one")
-    print("later by re-running onboarding. Leave blank to skip.")
+    section("CV (optional)")
+    print("Supply a CV to also get a CV-fit score on each job.")
+    print("You can add one later with  ./start.command --add-cv  — leave blank to skip.")
+    print("")
     print("Tip: Markdown, TXT, or DOCX score most reliably; born-digital PDFs work")
     print("too, but a scanned/image-only PDF can't be read and won't be scored.")
     raw = ask("Path to your CV (PDF/TXT/MD/DOCX), or blank to skip")
@@ -240,22 +260,30 @@ def configure_ntfy() -> dict | None:
     `{enabled, server, topic}` when enabled, or None (nothing written → no
     notifications). Sends one test ping on enable; warns but never blocks if it
     can't reach the server."""
-    print("\n--- Run notifications (optional) ---")
-    print("JobScout can ping your phone when a run finishes, via ntfy.sh — a free")
-    print("push service. You install the ntfy app and subscribe to a 'topic'.")
-    print("Heads up: ntfy topics are PUBLIC — anyone who knows the topic name can")
-    print("see its messages. JobScout only ever sends a generic 'run finished'")
-    print("message (never a job, company, count, or error), and uses a long random")
-    print("topic so it's effectively private. Keep your topic to yourself.")
+    section("Run notifications (optional)")
+    print("JobScout can ping your phone when a run finishes.")
+    print("")
+    print("It uses ntfy.sh, a free push service: install the ntfy app and")
+    print("subscribe to a private 'topic'.")
+    print("")
+    print("Heads up: ntfy topics are PUBLIC — anyone who knows the topic name")
+    print("can read its messages.")
+    print("")
+    print("JobScout only ever sends a generic 'run finished' message (never a")
+    print("job, company, count, or error), and uses a long random topic so it")
+    print("stays effectively private. Keep your topic to yourself.")
+    print("")
     if not ask_yes("Enable run notifications?", default_yes=False):
         print("   Skipping notifications.")
         return None
 
     generated = "jobscout-" + secrets.token_urlsafe(24)
     print(f"\n   Generated topic:  {generated}")
+    print("")
     print("   Subscribe to EXACTLY this topic in the ntfy app (or open")
-    print("   ntfy.sh/<topic> in a browser). It's your secret — long and random")
-    print("   so nobody can guess it.")
+    print("   ntfy.sh/<topic> in a browser). It's your secret — long and")
+    print("   random so nobody can guess it.")
+    print("")
     raw = ask("Press Enter to use this topic, or paste your own", default=generated)
     topic = raw.strip()
     if not VALID_NTFY_TOPIC.match(topic):
@@ -300,10 +328,38 @@ def write_outputs(answers: Answers, model_tag: str, cv_path: str | None,
     config = pt.build_config(answers, model_tag, cv_path, ntfy)
     CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n",
                            encoding="utf-8")
-    print("\n--- Done ---")
+    section("Done")
     print(f"  Wrote {PROFILE_PATH.name}  (your judging brief — hand-editable)")
     print(f"  Wrote {CONFIG_PATH.name}  (model + search settings the brain reads)")
-    print("  Both are gitignored. Re-run `start.command --setup` to change them.")
+    print("  Both are gitignored. Re-run `./start.command --setup` to change them.")
+
+
+def add_cv_only() -> int:
+    """Add or replace just the CV, without redoing the whole interview. Updates
+    cv_path in the existing config.json and leaves every other setting (and
+    profile.md) untouched."""
+    if not CONFIG_PATH.exists():
+        print("JobScout isn't set up yet — run install.command first "
+              "(or `./start.command --setup`).")
+        return 1
+    try:
+        config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        if not isinstance(config, dict):
+            raise ValueError("config.json is not a JSON object")
+    except (OSError, ValueError) as e:
+        print(f"Couldn't read config.json ({e}). Re-run full onboarding instead.")
+        return 1
+
+    cv_path = capture_cv()
+    if cv_path is None:
+        print("No CV added — config.json is unchanged.")
+        return 0
+    config["cv_path"] = cv_path
+    CONFIG_PATH.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
+    print(f"\nUpdated config.json — cv_path = {cv_path}.")
+    print("The next job search will add a CV-fit score to each match.")
+    return 0
 
 
 # --- entry point ------------------------------------------------------------
@@ -311,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="JobScout first-run interview.")
     parser.add_argument("--setup", action="store_true",
                         help="explicitly re-run onboarding (confirms before overwriting)")
+    parser.add_argument("--add-cv", action="store_true",
+                        help="add or replace just the CV, keeping the rest of your setup")
     args = parser.parse_args(argv)
 
     print("=" * 60)
@@ -318,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     print("=" * 60)
 
     try:
+        if args.add_cv:
+            return add_cv_only()
         if PROFILE_PATH.exists():
             who = "--setup re-run" if args.setup else "existing profile found"
             print(f"\nA profile already exists ({who}).")

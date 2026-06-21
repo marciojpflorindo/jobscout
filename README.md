@@ -35,7 +35,7 @@ JobScout has three local parts:
 
 JobScout needs three things on your Mac: a Python 3.12 interpreter, Ollama (the
 local model runner), and the JobScout code itself. You install the first two once
-with Homebrew; `start.command` handles everything else.
+with Homebrew; `install.command` handles everything else.
 
 **1. Install Homebrew** (if you don't already have it). Open Terminal and follow
 the one-line command at <https://brew.sh>.
@@ -60,10 +60,10 @@ git clone <repo-url> ~/jobscout
 That's the whole manual install. JobScout never auto-installs Homebrew, Python, or
 Ollama for you, and it never pipes a script from the internet into your shell.
 
-## First run
+## Setup (run once)
 
-Double-click **`start.command`** in the JobScout folder (or run `./start.command`
-in Terminal). On the first run it:
+Double-click **`install.command`** in the JobScout folder (or run
+`./install.command` in Terminal). It:
 
 1. checks your prerequisites and stops with a clear fix if anything's missing,
 2. builds a local Python sandbox (`.venv`) and installs the pinned dependencies,
@@ -71,45 +71,50 @@ in Terminal). On the first run it:
    where you're searching, and your dealbreakers,
 4. recommends a local model for your Mac's RAM and offers to download it,
 5. optionally sets up **phone notifications** when a run finishes (off by
-   default — see [Run notifications](#run-notifications)), and
-6. opens the **dashboard** in your browser.
+   default — see [Run notifications](#run-notifications)).
 
 Your answers are written to two local files at the repo root — `profile.md` (your
 hand-editable judging brief) and `config.json` (model + search settings). Both are
 gitignored and never leave your machine. Nothing is uploaded anywhere.
 
-> If you'd rather not download the model during onboarding, decline the offer —
+> If you'd rather not download the model during setup, decline the offer —
 > JobScout prints the exact `ollama pull …` command to run yourself later.
 
 ## Daily loop
 
-Once you're set up, a typical session is:
+Once you're set up, **make sure Ollama is running**, then double-click
+**`start.command`** (or run `./start.command`). One launch does the whole loop:
 
-1. **Make sure Ollama is running**, then **find jobs** — run the brain:
+1. it starts your local **dashboard**,
+2. runs the **search** — scrapes the sources, fetches each posting's full text,
+   judges every one against your profile, and publishes the good matches to the
+   dashboard as **Potential** (this can take several minutes; your Mac is kept
+   awake while it runs),
+3. opens the dashboard in your browser to review, and keeps it running until you
+   press **Ctrl-C**.
 
-   ```bash
-   .venv/bin/python brain/run.py
-   ```
+Then, in the dashboard:
 
-   It scrapes the sources, fetches each posting's full text, judges every one
-   against your profile, and publishes the good matches to your dashboard as
-   **Potential**. (Use `--dry-run` to judge without publishing, or `--top N` to
-   cap how many it judges.)
-
-2. **Open the dashboard** — double-click `start.command` (later runs skip setup
-   and go straight to the dashboard).
-
-3. **Review the Potential jobs.** As you act on each, move it along its status:
-   Potential → Applied → In conversation → Interviewing → Offer → … .
-
-4. **Reject with a note.** When a match isn't right, reject it and say why — that
-   note teaches the next brain run to down-rank similar jobs, so the matches get
-   better over time.
+- **Review the Potential jobs.** As you act on each, move it along its status:
+  Potential → Applied → In conversation → Interviewing → Offer → … .
+- **Reject with a note.** When a match isn't right, reject it and say why — that
+  note teaches the next search to down-rank similar jobs, so matches improve over
+  time.
 
 > Don't want to watch the terminal? Turn on [run notifications](#run-notifications)
 > and JobScout pings your phone when each run finishes.
 
-To change your profile, model, or add a CV later, re-run onboarding:
+Search options are forwarded to the brain, for example `./start.command --dry-run`
+(judge without publishing) or `./start.command --top 10` (cap how many postings
+are judged).
+
+> **Your results are never lost.** Each run writes its judged matches to a local
+> outbox *before* sending them to the dashboard. If the dashboard is unreachable,
+> the matches are kept and published automatically on the next run — so a hiccup
+> never wastes a run. To push held results immediately without re-searching:
+> `.venv/bin/python brain/run.py --publish-only`.
+
+To change your profile or model later, re-run the interview:
 
 ```bash
 ./start.command --setup
@@ -117,15 +122,15 @@ To change your profile, model, or add a CV later, re-run onboarding:
 
 ## Adding a CV later
 
-A CV is optional and can be added any time — just re-run onboarding:
+A CV is optional and can be added any time — without redoing the whole interview:
 
 ```bash
-./start.command --setup
+./start.command --add-cv
 ```
 
-When it asks for a CV, give the path. It's copied into the repo (gitignored) and
-its path is saved to `config.json`. The next brain run appends a **CV-fit score**
-to every job it publishes.
+Give the path when asked. It's copied into the repo (gitignored) and its path is
+saved to `config.json`. The next search appends a **CV-fit score** to every job it
+publishes.
 
 **Format matters.** Markdown, TXT, and DOCX read most reliably. A born-digital
 PDF (exported from Word, Google Docs, a CV builder) works too. A *scanned* PDF
@@ -190,7 +195,7 @@ board offers an RSS feed, use that.
 
 The trust-boundary behavior (input validation, SSRF guards, fail-closed model
 parsing, graceful source skips) is covered by a stdlib `unittest` suite. From the
-repo root, after the first run has built `.venv`:
+repo root, after `install.command` has built `.venv`:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests

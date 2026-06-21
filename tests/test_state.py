@@ -36,12 +36,15 @@ class TestPersistence(unittest.TestCase):
         self.dir = Path(tempfile.mkdtemp())
         self._orig_dir = ST.STATE_DIR
         self._orig_file = ST.SCORED_FILE
+        self._orig_pending = ST.PENDING_FILE
         ST.STATE_DIR = self.dir
         ST.SCORED_FILE = self.dir / "scored.json"
+        ST.PENDING_FILE = self.dir / "pending.json"
 
     def tearDown(self):
         ST.STATE_DIR = self._orig_dir
         ST.SCORED_FILE = self._orig_file
+        ST.PENDING_FILE = self._orig_pending
 
     def test_missing_file_is_empty(self):
         self.assertEqual(ST.load_scored(), {})
@@ -64,6 +67,41 @@ class TestPersistence(unittest.TestCase):
         self.assertIn("https://x.com/1", reloaded)
         self.assertEqual(reloaded["https://x.com/1"]["verdict"], "match")
         self.assertEqual(reloaded["https://x.com/1"]["score"], 90)
+
+    # --- pending outbox ---
+    def test_pending_missing_is_empty(self):
+        self.assertEqual(ST.load_pending(), {"survivors": [], "rejects": []})
+
+    def test_pending_roundtrip(self):
+        survivors = [{"Company": "Acme", "Job link": "https://x.com/1"}]
+        rejects = [{"link": "https://x.com/2", "reason": "on-site"}]
+        ST.save_pending(survivors, rejects)
+        loaded = ST.load_pending()
+        self.assertEqual(loaded["survivors"], survivors)
+        self.assertEqual(loaded["rejects"], rejects)
+
+    def test_pending_corrupt_recovers_empty(self):
+        ST.PENDING_FILE.write_text("{bad json", encoding="utf-8")
+        self.assertEqual(ST.load_pending(), {"survivors": [], "rejects": []})
+
+    def test_pending_non_dict_recovers_empty(self):
+        ST.PENDING_FILE.write_text("[1,2]", encoding="utf-8")
+        self.assertEqual(ST.load_pending(), {"survivors": [], "rejects": []})
+
+    def test_pending_filters_non_dict_entries(self):
+        ST.PENDING_FILE.write_text(
+            '{"survivors": [{"Company": "A"}, "junk", 3], "rejects": "nope"}',
+            encoding="utf-8")
+        loaded = ST.load_pending()
+        self.assertEqual(loaded["survivors"], [{"Company": "A"}])
+        self.assertEqual(loaded["rejects"], [])
+
+    def test_clear_pending_is_idempotent(self):
+        ST.save_pending([{"Job link": "https://x.com/1"}], [])
+        self.assertTrue(ST.PENDING_FILE.exists())
+        ST.clear_pending()
+        self.assertFalse(ST.PENDING_FILE.exists())
+        ST.clear_pending()  # second clear must not raise
 
 
 if __name__ == "__main__":
