@@ -27,7 +27,7 @@ JobScout has three local parts:
 
 - **Apple Silicon Mac** (M-series). Intel Macs are untested and likely far too
   slow.
-- **16 GB RAM or more** is the tested floor. Less will run behind a warning, but
+- **16 GB RAM or more** is the tested floor. Less will run behind a warning, because
   scoring may be slow or low quality.
 - macOS with Terminal access (you'll paste a few commands once).
 
@@ -47,8 +47,10 @@ brew install python@3.12
 brew install ollama
 ```
 
-**3. Start Ollama** — open the Ollama app (`open -a Ollama`) or run `ollama serve`
-in a Terminal tab. Leave it running; it's the local model server.
+**3. Start Ollama** — open the Ollama app and make sure it's running when you want to 
+run the script (it should be on your Mac's top bar, near the clock). Alternatively,
+you can also type in a Terminal tab  (`open -a Ollama`) or run `ollama serve`. 
+Leave it running; it's the local model server.
 
 **4. Get JobScout** — download or clone this repository to a folder you'll keep,
 for example:
@@ -65,12 +67,12 @@ Ollama for you, and it never pipes a script from the internet into your shell.
 Double-click **`1-install.command`** in the JobScout folder (or run
 `./1-install.command` in Terminal). It:
 
-1. checks your prerequisites and stops with a clear fix if anything's missing,
-2. builds a local Python sandbox (`.venv`) and installs the pinned dependencies,
-3. walks you through a short **interview** — who you are, the roles you want,
-   where you're searching, and your dealbreakers,
-4. recommends a local model for your Mac's RAM and offers to download it,
-5. optionally sets up **phone notifications** when a run finishes (off by
+1. Checks your prerequisites and stops with a clear fix if anything's missing
+2. Builds a local Python sandbox (`.venv`) and installs the pinned dependencies
+3. Walks you through a short **interview** — who you are, the roles you want,
+   where you're searching, and your dealbreakers
+4. Recommends a local model for your Mac's RAM and offers to download it
+5. Optionally sets up **phone notifications** when a run finishes (off by
    default — see [Run notifications](#run-notifications)).
 
 Your answers are written to two local files at the repo root — `profile.md` (your
@@ -85,12 +87,12 @@ gitignored and never leave your machine. Nothing is uploaded anywhere.
 Once you're set up, **make sure Ollama is running**, then double-click
 **`2-search-jobs.command`** (or run `./2-search-jobs.command`). One launch does the whole loop:
 
-1. it starts your local **dashboard**,
-2. runs the **search** — scrapes the sources, fetches each posting's full text,
+1. It starts your local **dashboard**
+2. Runs the **search** — scrapes the sources, fetches each posting's full text,
    judges every one against your profile, and publishes the good matches to the
    dashboard as **Potential** (this can take several minutes; your Mac is kept
-   awake while it runs),
-3. opens the dashboard in your browser to review, and keeps it running until you
+   awake while it runs)
+3. Opens the dashboard in your browser to review, and keeps it running until you
    press **Ctrl-C**.
 
 The dashboard has two tabs:
