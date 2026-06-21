@@ -3,7 +3,7 @@
 Stdlib `unittest` only — no test dependencies beyond the runtime ones the brain
 already needs (`requests`, `beautifulsoup4`, plus the lazily-imported
 `feedparser`/`pypdf`). Run them from the repo root, inside the same `.venv`
-`start.command` builds:
+`search-jobs.command` builds:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests

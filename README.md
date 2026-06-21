@@ -83,7 +83,7 @@ gitignored and never leave your machine. Nothing is uploaded anywhere.
 ## Daily loop
 
 Once you're set up, **make sure Ollama is running**, then double-click
-**`start.command`** (or run `./start.command`). One launch does the whole loop:
+**`search-jobs.command`** (or run `./search-jobs.command`). One launch does the whole loop:
 
 1. it starts your local **dashboard**,
 2. runs the **search** — scrapes the sources, fetches each posting's full text,
@@ -113,11 +113,11 @@ you've triaged them, switch to **Tracker** to manage your pipeline.
 
 To look at and update the jobs you already have — without scraping and without the
 several-minute wait — double-click **`open-dashboard.command`** (or run
-`./start.command --no-search`). It brings the dashboard straight up; it doesn't even
+`./search-jobs.command --no-search`). It brings the dashboard straight up; it doesn't even
 need Ollama running.
 
-Search options are forwarded to the brain, for example `./start.command --dry-run`
-(judge without publishing) or `./start.command --top 10` (cap how many postings
+Search options are forwarded to the brain, for example `./search-jobs.command --dry-run`
+(judge without publishing) or `./search-jobs.command --top 10` (cap how many postings
 are judged).
 
 > **Your results are never lost.** Each run writes its judged matches to a local
@@ -129,7 +129,7 @@ are judged).
 To change your profile or model later, re-run the interview:
 
 ```bash
-./start.command --setup
+./search-jobs.command --setup
 ```
 
 ## Adding a CV later
@@ -137,7 +137,7 @@ To change your profile or model later, re-run the interview:
 A CV is optional and can be added any time — without redoing the whole interview:
 
 ```bash
-./start.command --add-cv
+./search-jobs.command --add-cv
 ```
 
 Give the path when asked. It's copied into the repo (gitignored) and its path is
@@ -174,7 +174,7 @@ After each run you'll get one of three generic messages: *new jobs to review*,
 > URL, or error text) and uses a long random topic that's effectively impossible
 > to guess. Keep your topic to yourself. Self-hosting an ntfy server? Set its URL
 > when onboarding asks. To change or disable notifications, re-run onboarding with
-> `./start.command --setup`.
+> `./search-jobs.command --setup`.
 
 ## Advanced: extra job sources
 

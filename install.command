@@ -6,7 +6,7 @@
 # the pinned dependencies, and walks you through the first-run interview. When it
 # finishes you'll have a profile.md + config.json and be ready to search.
 #
-# After this, use start.command to actually search for jobs and open the dashboard.
+# After this, use search-jobs.command to actually search for jobs and open the dashboard.
 #
 # Threat model: runs on the user's own Mac, double-clicked. The only inputs are
 # the local environment and the interactive interview answers — all trusted. Every
@@ -39,7 +39,7 @@ if ! "$PYBIN" onboarding/interview.py; then
 fi
 
 header "Setup complete."
-say "Next: double-click start.command to search for jobs and open your dashboard."
+say "Next: double-click search-jobs.command to search for jobs and open your dashboard."
 say ""
-say "Re-run the interview any time:  ./start.command --setup"
-say "Add (or replace) a CV later:    ./start.command --add-cv"
+say "Re-run the interview any time:  ./search-jobs.command --setup"
+say "Add (or replace) a CV later:    ./search-jobs.command --add-cv"

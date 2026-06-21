@@ -12,7 +12,7 @@ python3 onboarding/interview.py          # first run, or redo the interview
 python3 onboarding/interview.py --setup   # explicit re-run (confirms first)
 ```
 
-`start.command` runs this automatically on first launch (wired in Phase 6).
+`search-jobs.command` runs this automatically on first launch (wired in Phase 6).
 
 ## What it produces (both gitignored, at the repo root)
 

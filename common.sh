@@ -1,4 +1,4 @@
-# Shared helpers for install.command and start.command.
+# Shared helpers for install.command and search-jobs.command.
 #
 # This file is SOURCED, not executed — the caller has already `cd`'d into the
 # repo root and set `set -euo pipefail`. It only defines variables and functions.
@@ -115,7 +115,7 @@ ensure_venv() {
     say "Sandbox ready."
 }
 
-# --- dashboard helpers (start.command) --------------------------------------
+# --- dashboard helpers (search-jobs.command) --------------------------------------
 
 # Read dashboard_port from config.json via the venv Python (no fragile shell
 # JSON parsing). Falls back to 8765 unless the value is a usable TCP port

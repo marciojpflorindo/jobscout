@@ -12,7 +12,7 @@ python3 dashboard/server.py            # opens http://127.0.0.1:8765/
 python3 dashboard/server.py --port 9000 --store /path/to/store.json --no-open
 ```
 
-(`start.command` launches this for you — see the repo README.)
+(`search-jobs.command` launches this for you — see the repo README.)
 
 ## Layout
 

@@ -9,13 +9,13 @@
 # First, run install.command once (it builds the sandbox and sets up your profile).
 #
 # Just open the dashboard to look at it, WITHOUT running a new search:
-#   ./start.command --no-search   (alias: --view)  — this is what open-dashboard.command runs
+#   ./search-jobs.command --no-search   (alias: --view)  — this is what open-dashboard.command runs
 # Settings, without searching:
-#   ./start.command --setup     re-run the whole interview
-#   ./start.command --add-cv    add or replace just your CV
+#   ./search-jobs.command --setup     re-run the whole interview
+#   ./search-jobs.command --add-cv    add or replace just your CV
 # Extra search options are forwarded to the brain, e.g.:
-#   ./start.command --dry-run   judge but don't publish
-#   ./start.command --top 10    cap how many postings are judged
+#   ./search-jobs.command --dry-run   judge but don't publish
+#   ./search-jobs.command --top 10    cap how many postings are judged
 #
 # Threat model: runs on the user's own Mac, double-clicked. Inputs are the local
 # environment, config.json (user-written), and pass-through flags — all trusted.
@@ -66,7 +66,7 @@ fi
 if (( ! NO_SEARCH )) && [[ ! -f "$PROFILE" ]]; then
     die "JobScout isn't set up yet." \
         "Double-click install.command first — it builds the sandbox and runs the interview." \
-        "Then double-click start.command to search for jobs."
+        "Then double-click search-jobs.command to search for jobs."
 fi
 
 # Ollama and keep-awake are only for the search. Viewing the dashboard needs neither.

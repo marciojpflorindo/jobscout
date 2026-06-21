@@ -230,7 +230,7 @@ def capture_cv() -> str | None:
     stored relative path, or None if skipped/unusable."""
     section("CV (optional)")
     print("Supply a CV to also get a CV-fit score on each job.")
-    print("You can add one later with  ./start.command --add-cv  — leave blank to skip.")
+    print("You can add one later with  ./search-jobs.command --add-cv  — leave blank to skip.")
     print("")
     print("Tip: Markdown, TXT, or DOCX score most reliably; born-digital PDFs work")
     print("too, but a scanned/image-only PDF can't be read and won't be scored.")
@@ -331,7 +331,7 @@ def write_outputs(answers: Answers, model_tag: str, cv_path: str | None,
     section("Done")
     print(f"  Wrote {PROFILE_PATH.name}  (your judging brief — hand-editable)")
     print(f"  Wrote {CONFIG_PATH.name}  (model + search settings the brain reads)")
-    print("  Both are gitignored. Re-run `./start.command --setup` to change them.")
+    print("  Both are gitignored. Re-run `./search-jobs.command --setup` to change them.")
 
 
 def add_cv_only() -> int:
@@ -340,7 +340,7 @@ def add_cv_only() -> int:
     profile.md) untouched."""
     if not CONFIG_PATH.exists():
         print("JobScout isn't set up yet — run install.command first "
-              "(or `./start.command --setup`).")
+              "(or `./search-jobs.command --setup`).")
         return 1
     try:
         config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
