@@ -93,16 +93,28 @@ Once you're set up, **make sure Ollama is running**, then double-click
 3. opens the dashboard in your browser to review, and keeps it running until you
    press **Ctrl-C**.
 
-Then, in the dashboard:
+The dashboard has two tabs:
 
-- **Review the Potential jobs.** As you act on each, move it along its status:
-  Potential → Applied → In conversation → Interviewing → Offer → … .
-- **Reject with a note.** When a match isn't right, reject it and say why — that
-  note teaches the next search to down-rank similar jobs, so matches improve over
-  time.
+- **⭐ Review** — the Potential jobs the search just found, waiting for your call.
+  The count badge shows how many are left to triage. Keep the good ones by moving
+  them to **Applied** (or any later status); **reject with a note** when one isn't
+  right — that note teaches the next search to down-rank similar jobs, so matches
+  improve over time.
+- **📊 Tracker** — every job you've applied to, with your stats and charts, tracked
+  through its status lifecycle: Applied → In conversation → Interviewing → Offer → … .
+
+After a fresh search you'll land on **Review** (that's where the new jobs are); once
+you've triaged them, switch to **Tracker** to manage your pipeline.
 
 > Don't want to watch the terminal? Turn on [run notifications](#run-notifications)
 > and JobScout pings your phone when each run finishes.
+
+### Just open the dashboard (no search)
+
+To look at and update the jobs you already have — without scraping and without the
+several-minute wait — double-click **`open-dashboard.command`** (or run
+`./start.command --no-search`). It brings the dashboard straight up; it doesn't even
+need Ollama running.
 
 Search options are forwarded to the brain, for example `./start.command --dry-run`
 (judge without publishing) or `./start.command --top 10` (cap how many postings

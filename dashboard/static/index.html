@@ -27,6 +27,20 @@
       </div>
     </header>
 
+    <nav class="tabs" aria-label="Views">
+      <button id="tab-review" class="tab" type="button" aria-pressed="false"
+              title="Potential jobs the brain found — keep the good ones, reject the rest">
+        <span class="tab-label">⭐ Review</span><span class="tab-count" id="tab-review-count" hidden>0</span>
+      </button>
+      <button id="tab-tracker" class="tab" type="button" aria-pressed="false"
+              title="Jobs you've applied to — your pipeline and stats">
+        <span class="tab-label">📊 Tracker</span>
+      </button>
+    </nav>
+
+    <!-- Tracker-only chrome (KPIs, charts, stale list): hidden in the Review tab and
+         when there are no applications yet, so a fresh scrape never shows empty charts. -->
+    <div id="tracker-only">
     <section class="kpis" id="kpis"></section>
 
     <section class="charts">
@@ -70,10 +84,9 @@
       <ul id="stale-list" class="stale-list"></ul>
       <p id="stale-empty" class="muted stale-empty" hidden>All up to date — nothing to close out 🎉</p>
     </section>
+    </div><!-- /#tracker-only -->
 
     <section class="list-controls">
-      <button id="btn-potential" class="pot-chip" hidden aria-pressed="false"
-              title="View potential jobs found by the brain (not applied to yet)"><span class="pot-icon">⭐</span> Potential <span class="pot-count">0</span></button>
       <input type="search" id="search" placeholder="Search company or role…" aria-label="Search">
       <select id="filter-status" aria-label="Filter by status"><option value="">All statuses</option></select>
       <select id="sort" aria-label="Sort">

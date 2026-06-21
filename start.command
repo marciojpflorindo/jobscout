@@ -8,6 +8,8 @@
 #
 # First, run install.command once (it builds the sandbox and sets up your profile).
 #
+# Just open the dashboard to look at it, WITHOUT running a new search:
+#   ./start.command --no-search   (alias: --view)  — this is what open-dashboard.command runs
 # Settings, without searching:
 #   ./start.command --setup     re-run the whole interview
 #   ./start.command --add-cv    add or replace just your CV
@@ -43,23 +45,40 @@ case "${1:-}" in
         ;;
 esac
 
+# --- view-only mode: open the dashboard without searching -------------------
+# Consume the flag so it's never forwarded to the brain (which we skip anyway).
+NO_SEARCH=0
+case "${1:-}" in
+    --no-search|--view)
+        NO_SEARCH=1
+        shift
+        ;;
+esac
+
 check_arch
 
-# Must be installed first (install.command builds .venv and writes profile.md).
-if [[ ! -x "$PYBIN" || ! -f "$PROFILE" ]]; then
+# Must be installed first (install.command builds .venv). A search also needs the
+# profile; viewing the dashboard does not, so only require it when we'll search.
+if [[ ! -x "$PYBIN" ]]; then
+    die "JobScout isn't set up yet." \
+        "Double-click install.command first — it builds the sandbox and runs the interview."
+fi
+if (( ! NO_SEARCH )) && [[ ! -f "$PROFILE" ]]; then
     die "JobScout isn't set up yet." \
         "Double-click install.command first — it builds the sandbox and runs the interview." \
         "Then double-click start.command to search for jobs."
 fi
 
-check_ollama
-
-# Keep the Mac awake for the whole run (a full search can take several minutes).
-# -i prevents idle sleep only; -w "$$" ties caffeinate's lifetime to THIS script,
-# so it self-reaps when we exit — that's why the cleanup trap below only needs to
-# kill the dashboard, not caffeinate. (If you drop -w "$$", add it to the trap.)
-if command -v caffeinate >/dev/null 2>&1; then
-    caffeinate -i -w "$$" &
+# Ollama and keep-awake are only for the search. Viewing the dashboard needs neither.
+if (( ! NO_SEARCH )); then
+    check_ollama
+    # Keep the Mac awake for the whole run (a full search can take several minutes).
+    # -i prevents idle sleep only; -w "$$" ties caffeinate's lifetime to THIS script,
+    # so it self-reaps when we exit — that's why the cleanup trap below only needs to
+    # kill the dashboard, not caffeinate. (If you drop -w "$$", add it to the trap.)
+    if command -v caffeinate >/dev/null 2>&1; then
+        caffeinate -i -w "$$" &
+    fi
 fi
 
 PORT="$(read_port)"
@@ -82,13 +101,20 @@ if ! wait_for_dashboard "$PORT" "$DASH_PID"; then
 fi
 say "Dashboard ready."
 
-# Search for jobs. The brain publishes good matches to the running dashboard.
-header "Searching for jobs (this can take several minutes)…"
-"$PYBIN" brain/run.py "$@" || warn "The job search ended with an error (see the messages above)."
+# Search for jobs (unless we're in view-only mode). The brain publishes good
+# matches to the running dashboard.
+if (( ! NO_SEARCH )); then
+    header "Searching for jobs (this can take several minutes)…"
+    "$PYBIN" brain/run.py "$@" || warn "The job search ended with an error (see the messages above)."
+fi
 
-# Open the dashboard to review results, then hand the terminal over to it.
+# Open the dashboard, then hand the terminal over to it.
 say ""
-say "Opening the dashboard — review your matches there."
+if (( NO_SEARCH )); then
+    say "Opening the dashboard (view only — no new search)."
+else
+    say "Opening the dashboard — review your matches there."
+fi
 open "$DASH_URL" >/dev/null 2>&1 || true
 say ""
 say "Dashboard is running at ${DASH_URL}"

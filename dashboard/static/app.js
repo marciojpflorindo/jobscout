@@ -17,12 +17,19 @@ const ACTIVE = ['Applied', 'In conversation', 'Interviewing', 'Offer'];
 const POSITIVE = ['In conversation', 'Interviewing', 'Offer', 'Accepted'];
 
 // "Potential" = a brain candidate not yet applied to. It is NOT a real application:
-// excluded from the KPIs/charts and the default list, and shown in its own view (the
-// "Potential" filter chip). Applying = change its Status to "Applied".
+// excluded from the KPIs/charts, and shown in its own "Review" tab. Keeping a job =
+// change its Status to "Applied", which moves it into the "Tracker" tab.
 const POTENTIAL = 'Potential';
 // Real applications only (everything that isn't a pending candidate).
 function appRows() { return DATA.rows.filter((r) => r.Status !== POTENTIAL); }
 function potentialRows() { return DATA.rows.filter((r) => r.Status === POTENTIAL); }
+
+// Two views, one per tab. "review" = triage the Potential queue; "tracker" = manage
+// applied jobs + see the stats. The default is picked once on first load (Review when
+// there are candidates to triage, else Tracker) and then left to the user's clicks, so
+// a background reload never yanks them out of the tab they're working in.
+let VIEW = 'tracker';
+let viewInitialized = false;
 
 // --- State ------------------------------------------------------------------
 let DATA = { statuses: [], months: [], rows: [] };
@@ -147,11 +154,23 @@ async function load() {
   const nApp = appRows().length;
   $('#subtitle').textContent = nApp + ' application' + (nApp === 1 ? '' : 's')
     + ' · ' + new Date().toLocaleString();
+  // First load only: land on whichever tab has something to do.
+  if (!viewInitialized) {
+    VIEW = potentialRows().length > 0 ? 'review' : 'tracker';
+    viewInitialized = true;
+  }
+  applyView();
+  // Charts/KPIs/stale only need rendering when the Tracker chrome is actually visible
+  // (Chart.js sizes to its container, so painting into a hidden one would mis-size it).
+  if (trackerChromeVisible()) renderTracker();
+  renderList();
+}
+
+// KPIs + charts + stale list — the Tracker-only chrome.
+function renderTracker() {
   renderKpis();
   renderCharts();
   renderStale();
-  renderPotentialChip();
-  renderList();
 }
 
 function wireEvents() {
@@ -172,14 +191,9 @@ function wireEvents() {
   // Clear selection when the visible set changes, so you can't batch-delete rows
   // that scrolled out of view under a filter/search.
   $('#search').addEventListener('input', () => { selected.clear(); renderList(); });
-  $('#filter-status').addEventListener('change', () => { selected.clear(); renderPotentialChip(); renderList(); });
-  $('#btn-potential').addEventListener('click', () => {
-    const fe = $('#filter-status');
-    fe.value = fe.value === POTENTIAL ? '' : POTENTIAL;  // toggle the candidates view
-    selected.clear();
-    renderPotentialChip();
-    renderList();
-  });
+  $('#filter-status').addEventListener('change', () => { selected.clear(); renderList(); });
+  $('#tab-review').addEventListener('click', () => setView('review'));
+  $('#tab-tracker').addEventListener('click', () => setView('tracker'));
   $('#sort').addEventListener('change', () => {
     const p = SORT_PRESETS[$('#sort').value];
     if (p) SORT = Object.assign({}, p);
@@ -222,21 +236,38 @@ function cycleTheme() {
   if (window.Chart) renderCharts(); // colors come from CSS vars at draw time
 }
 
-// --- KPIs -------------------------------------------------------------------
-// The "Potential" view chip: a count badge + toggle into the candidates list.
-function renderPotentialChip() {
-  const btn = $('#btn-potential');
-  if (!btn) return;
+// --- Tabs / views -----------------------------------------------------------
+// The Tracker chrome shows only in the Tracker tab AND once there's at least one
+// application — so a fresh scrape (all Potential) never greets the user with empty
+// charts; they see the Review queue instead.
+function trackerChromeVisible() { return VIEW === 'tracker' && appRows().length > 0; }
+
+// Reflect VIEW in the DOM: active tab, the Review count badge, and what's visible.
+function applyView() {
+  const review = VIEW === 'review';
   const n = potentialRows().length;
-  const active = $('#filter-status').value === POTENTIAL;
-  btn.querySelector('.pot-count').textContent = String(n);
-  btn.querySelector('.pot-icon').textContent = active ? '👁' : '⭐';
-  btn.title = active
-    ? 'Viewing potential jobs — click to go back to all applications'
-    : 'View potential jobs found by the brain (not applied to yet)';
-  btn.hidden = n === 0 && !active;
-  btn.classList.toggle('active', active);
-  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  const badge = $('#tab-review-count');
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
+  [['#tab-review', review], ['#tab-tracker', !review]].forEach(([sel, on]) => {
+    const t = $(sel);
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  $('#tracker-only').hidden = !trackerChromeVisible();
+  // A status filter only makes sense over the mixed Tracker pipeline.
+  $('#filter-status').hidden = review;
+}
+
+// Switch tabs. Clears the (positional) selection so a later batch action can't hit
+// rows from the other view; keeps the search box so a query carries across.
+function setView(view) {
+  if (view !== 'review' && view !== 'tracker' || view === VIEW) return;
+  VIEW = view;
+  selected.clear();
+  applyView();
+  if (trackerChromeVisible()) renderTracker();
+  renderList();
 }
 
 function renderKpis() {
@@ -377,13 +408,12 @@ function sortVal(r, key, type) {
 
 function visibleRows() {
   const q = $('#search').value.trim().toLowerCase();
-  const fe = $('#filter-status').value;
-  let rows = DATA.rows.filter((r) => {
-    // Potential candidates show ONLY when explicitly filtered to them; never in the
-    // default applications list or under another status filter.
-    if (fe === POTENTIAL) { if (r.Status !== POTENTIAL) return false; }
-    else if (r.Status === POTENTIAL) return false;
-    else if (fe && r.Status !== fe) return false;
+  // The tab picks the universe: Review = the Potential queue, Tracker = real
+  // applications (optionally narrowed by the status filter). Search applies to both.
+  const base = VIEW === 'review' ? potentialRows() : appRows();
+  const fe = VIEW === 'review' ? '' : $('#filter-status').value;
+  let rows = base.filter((r) => {
+    if (fe && r.Status !== fe) return false;
     if (q && (DATA.columns || []).map((c) => r[c] || '').join(' ').toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
@@ -419,9 +449,27 @@ function renderList() {
     host.className = 'cards';
     rows.forEach((r) => host.appendChild(buildCard(r)));
   }
-  $('#count').textContent = rows.length + ' of ' + DATA.rows.length;
+  $('#count').textContent = VIEW === 'review'
+    ? rows.length + ' to review'
+    : rows.length + ' of ' + appRows().length;
+  $('#empty').textContent = listEmptyMessage();
   $('#empty').hidden = rows.length !== 0;
   renderSelBar();
+}
+
+// A real, situation-specific empty state so nothing ever just silently vanishes.
+function listEmptyMessage() {
+  const searching = $('#search').value.trim() !== '';
+  if (VIEW === 'review') {
+    if (potentialRows().length === 0) {
+      return 'All caught up — no jobs to review. Kept jobs are in the Tracker tab; run a search to find more.';
+    }
+    return 'No potential jobs match your search.';
+  }
+  if (appRows().length === 0) {
+    return 'No applications yet. Keep jobs from the Review tab, or add one with “+ New application”.';
+  }
+  return searching || $('#filter-status').value ? 'No applications match.' : 'No applications yet.';
 }
 
 function renderSelBar() {
@@ -497,7 +545,8 @@ function goToRow(r) {
   $('#search').value = '';
   $('#filter-status').value = '';
   selected.clear();
-  renderPotentialChip();
+  // Stale suggestions only live in the Tracker, but be explicit so the jump lands.
+  if (VIEW !== 'tracker') { VIEW = 'tracker'; applyView(); if (trackerChromeVisible()) renderTracker(); }
   renderList();
   const el = $('#list').querySelector('[data-row-id="' + r.id + '"]');
   if (!el) return;
@@ -966,8 +1015,11 @@ function populateFilter() {
   const fe = $('#filter-status');
   const prev = fe.value;  // preserve the active filter across a rebuild
   fe.innerHTML = '<option value="">All statuses</option>';
-  DATA.statuses.forEach((e) => { const o = document.createElement('option'); o.value = e; o.textContent = e; fe.appendChild(o); });
-  if (prev && DATA.statuses.indexOf(prev) !== -1) fe.value = prev;
+  // "Potential" is the Review tab, not a Tracker filter — leave it out of the dropdown.
+  DATA.statuses.filter((e) => e !== POTENTIAL).forEach((e) => {
+    const o = document.createElement('option'); o.value = e; o.textContent = e; fe.appendChild(o);
+  });
+  if (prev && prev !== POTENTIAL && DATA.statuses.indexOf(prev) !== -1) fe.value = prev;
 }
 
 function monthFromDate(d) {

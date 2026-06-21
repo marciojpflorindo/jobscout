@@ -35,7 +35,7 @@ link) · `GET /api/links` (the "already considered" exclusion set for the brain)
 One row: `Month, Company, Date, Role, Job link, Contact via, Status, Response
 date, Notes`. Dates are `DD-MM-YYYY`. `Status` is a closed allowlist, fails closed
 to `Applied`. `Potential` is pre-application (brain candidates): excluded from
-KPIs/charts and the default list, surfaced only via the ⭐ Potential filter.
+KPIs/charts, and shown in the front end's own ⭐ Review tab (Tracker holds applied jobs).
 `Response date` is auto-stamped the first time a row enters a responded status
 (never overwritten). `_updated` is an internal last-touched timestamp (not a
 column; drives the "Last activity" sort; kept out of CSV export).
