@@ -35,7 +35,7 @@ JobScout has three local parts:
 
 JobScout needs three things on your Mac: a Python 3.12 interpreter, Ollama (the
 local model runner), and the JobScout code itself. You install the first two once
-with Homebrew; `install.command` handles everything else.
+with Homebrew; `1-install.command` handles everything else.
 
 **1. Install Homebrew** (if you don't already have it). Open Terminal and follow
 the one-line command at <https://brew.sh>.
@@ -62,8 +62,8 @@ Ollama for you, and it never pipes a script from the internet into your shell.
 
 ## Setup (run once)
 
-Double-click **`install.command`** in the JobScout folder (or run
-`./install.command` in Terminal). It:
+Double-click **`1-install.command`** in the JobScout folder (or run
+`./1-install.command` in Terminal). It:
 
 1. checks your prerequisites and stops with a clear fix if anything's missing,
 2. builds a local Python sandbox (`.venv`) and installs the pinned dependencies,
@@ -83,7 +83,7 @@ gitignored and never leave your machine. Nothing is uploaded anywhere.
 ## Daily loop
 
 Once you're set up, **make sure Ollama is running**, then double-click
-**`search-jobs.command`** (or run `./search-jobs.command`). One launch does the whole loop:
+**`2-search-jobs.command`** (or run `./2-search-jobs.command`). One launch does the whole loop:
 
 1. it starts your local **dashboard**,
 2. runs the **search** — scrapes the sources, fetches each posting's full text,
@@ -112,12 +112,12 @@ you've triaged them, switch to **Tracker** to manage your pipeline.
 ### Just open the dashboard (no search)
 
 To look at and update the jobs you already have — without scraping and without the
-several-minute wait — double-click **`open-dashboard.command`** (or run
-`./search-jobs.command --no-search`). It brings the dashboard straight up; it doesn't even
+several-minute wait — double-click **`3-open-dashboard.command`** (or run
+`./2-search-jobs.command --no-search`). It brings the dashboard straight up; it doesn't even
 need Ollama running.
 
-Search options are forwarded to the brain, for example `./search-jobs.command --dry-run`
-(judge without publishing) or `./search-jobs.command --top 10` (cap how many postings
+Search options are forwarded to the brain, for example `./2-search-jobs.command --dry-run`
+(judge without publishing) or `./2-search-jobs.command --top 10` (cap how many postings
 are judged).
 
 > **Your results are never lost.** Each run writes its judged matches to a local
@@ -129,7 +129,7 @@ are judged).
 To change your profile or model later, re-run the interview:
 
 ```bash
-./search-jobs.command --setup
+./2-search-jobs.command --setup
 ```
 
 ## Adding a CV later
@@ -137,7 +137,7 @@ To change your profile or model later, re-run the interview:
 A CV is optional and can be added any time — without redoing the whole interview:
 
 ```bash
-./search-jobs.command --add-cv
+./2-search-jobs.command --add-cv
 ```
 
 Give the path when asked. It's copied into the repo (gitignored) and its path is
@@ -174,7 +174,7 @@ After each run you'll get one of three generic messages: *new jobs to review*,
 > URL, or error text) and uses a long random topic that's effectively impossible
 > to guess. Keep your topic to yourself. Self-hosting an ntfy server? Set its URL
 > when onboarding asks. To change or disable notifications, re-run onboarding with
-> `./search-jobs.command --setup`.
+> `./2-search-jobs.command --setup`.
 
 ## Advanced: extra job sources
 
@@ -215,7 +215,7 @@ board offers an RSS feed, use that.
 
 The trust-boundary behavior (input validation, SSRF guards, fail-closed model
 parsing, graceful source skips) is covered by a stdlib `unittest` suite. From the
-repo root, after `install.command` has built `.venv`:
+repo root, after `1-install.command` has built `.venv`:
 
 ```bash
 .venv/bin/python -m unittest discover -s tests
