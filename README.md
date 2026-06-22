@@ -161,11 +161,12 @@ A brain run can take a while, so JobScout can ping your phone when one finishes 
 via [ntfy](https://ntfy.sh), a free push service. It's **off by default**;
 onboarding asks if you want it.
 
-If you enable it:
+If you enable notifications:
 
-1. JobScout generates a long, random **topic** (e.g. `jobscout-x7Qa…`) and shows it.
-2. Install the **ntfy** app (iOS/Android) — or open `ntfy.sh/<topic>` in a
-   browser — and **subscribe to exactly that topic**.
+1. Install the **ntfy** app on your phone (iOS/Android) — or open `ntfy.sh/<topic>` in 
+a browser — and **subscribe to exactly that topic**.
+2. JobScout generates a long, random **topic** for you (e.g. `jobscout-x7Qa…`) and shows it
+— you can create your own if you prefer.
 3. Onboarding sends a test notification so you can confirm it works.
 
 After each run you'll get one of three generic messages: *new jobs to review*,
