@@ -1,6 +1,7 @@
 # JobScout
 
-> A local-first job-search tool for macOS. A local LLM finds and *judges* job
+> A local-first job-search tool for macOS. A script finds jobs that
+> fit your preferences, then a local LLM *judges* job
 > postings against a profile you build in a first-run interview, and a local
 > dashboard tracks every application through its lifecycle. Everything runs on
 > your own Mac — no cloud, no accounts, no secrets.
