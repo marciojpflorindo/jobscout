@@ -810,10 +810,6 @@ async function deleteIds(ids, btn) {
 
 async function rejectPotential(r, control) {
   const link = String(r['Job link'] || '').trim();
-  if (!/^https?:\/\//i.test(link)) {
-    toast('This job has no posting link, so JobScout cannot remember rejection feedback. Use Delete to remove it.', true);
-    return false;
-  }
   const label = [r.Company, r.Role].filter(Boolean).join(' — ') || 'this job';
   const entered = prompt('Why is ' + label + ' not a fit? This note teaches JobScout what to avoid next time.', '');
   if (entered === null) return false;
@@ -826,11 +822,19 @@ async function rejectPotential(r, control) {
   const isButton = control && control.tagName === 'BUTTON';
   const isSelect = control && control.tagName === 'SELECT';
   const run = async () => {
-    await postJSON('/api/reject', { rejected: [{ link, reason, source: 'user' }] });
-    await postJSON('/api/delete', { items: [{ id: r.id, company: r.Company || '' }] });
+    await postJSON('/api/update', { id: r.id, field: 'Notes', value: rejectionNotes(r, reason), expect: r.Company || '' });
+    await postJSON('/api/update', { id: r.id, field: 'Status', value: 'Rejected', expect: r.Company || '' });
+    if (/^https?:\/\//i.test(link)) {
+      try {
+        await postJSON('/api/reject', { rejected: [{ link, reason, source: 'user' }] });
+      } catch (err) {
+        // The row itself now carries the rejection note for /api/links; the ledger
+        // is a best-effort backup if the row is deleted later.
+      }
+    }
     selected.delete(r.id);
     await load();
-    toast('Rejected and saved as feedback.');
+    toast('Rejected and kept in your tracker.');
     return true;
   };
 
@@ -844,6 +848,12 @@ async function rejectPotential(r, control) {
   } finally {
     if (isSelect) control.disabled = false;
   }
+}
+
+function rejectionNotes(r, reason) {
+  const current = String((r && r.Notes) || '').trim();
+  const line = 'Rejected: ' + reason;
+  return current ? line + '\n\n' + current : line;
 }
 
 function buildCard(r) {

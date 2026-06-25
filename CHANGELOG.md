@@ -36,6 +36,6 @@ All notable changes to JobScout are documented here.
   `1-install.command` and `2-search-jobs.command`.
 - The dashboard server version now matches the public `v1.5` release marker.
 - Review candidates now have an explicit Reject flow that captures feedback,
-  records it for future exclusions, and removes the candidate from Review.
+  records it for future exclusions, and keeps the rejected job in dashboard stats.
 - Local-model onboarding suggestions are stripped of terminal control characters
   before being printed or accepted.
