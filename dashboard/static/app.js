@@ -23,6 +23,7 @@ const POTENTIAL = 'Potential';
 // Real applications only (everything that isn't a pending candidate).
 function appRows() { return DATA.rows.filter((r) => r.Status !== POTENTIAL); }
 function potentialRows() { return DATA.rows.filter((r) => r.Status === POTENTIAL); }
+function isPotential(r) { return r && r.Status === POTENTIAL; }
 
 // Three views: "tracker" = KPIs/charts, "companies" = real application list,
 // "review" = triage the Potential queue. The default is picked once on first load
@@ -700,9 +701,15 @@ function rowActions(r) {
   const d = make('td', 'row-actions');
   const edit = make('button', 'ghost mini', 'Edit');
   edit.addEventListener('click', () => openModal(r));
+  d.appendChild(edit);
+  if (isPotential(r)) {
+    const reject = make('button', 'ghost mini danger', 'Reject');
+    reject.title = 'Reject with a note so JobScout learns from it';
+    reject.addEventListener('click', () => rejectPotential(r, reject));
+    d.appendChild(reject);
+  }
   const del = make('button', 'ghost mini danger', 'Delete');
   del.addEventListener('click', () => deleteIds([r.id], del));
-  d.appendChild(edit);
   d.appendChild(del);
   return d;
 }
@@ -784,18 +791,58 @@ function beginEdit(node, r, field, type, opts) {
 async function deleteIds(ids, btn) {
   ids = (ids || []).filter((id) => id != null && DATA.rows[id]);
   if (!ids.length) return;
+  const one = ids.length === 1 ? DATA.rows[ids[0]] : null;
+  const noun = one ? (isPotential(one) ? 'candidate' : 'application') : 'item';
   const msg = ids.length === 1
-    ? 'Delete this application?'
-    : 'Delete ' + ids.length + ' applications? This cannot be undone.';
+    ? 'Delete this ' + noun + '?'
+    : 'Delete ' + ids.length + ' items? This cannot be undone.';
   if (!confirm(msg)) return;
   const items = ids.map((id) => ({ id, company: DATA.rows[id].Company || '' }));
   try {
     const res = await withBusy(btn, 'Deleting…', () => postJSON('/api/delete', { items }));
     await load();
     const n = (res && res.removed != null) ? res.removed : ids.length;
-    toast(n === 1 ? 'Application deleted.' : n + ' applications deleted.');
+    toast(n === 1 ? (isPotential(one) ? 'Candidate deleted.' : 'Application deleted.') : n + ' items deleted.');
   } catch (err) {
     toast('Error deleting: ' + errMsg(err), true);
+  }
+}
+
+async function rejectPotential(r, control) {
+  const link = String(r['Job link'] || '').trim();
+  if (!/^https?:\/\//i.test(link)) {
+    toast('This job has no posting link, so JobScout cannot remember rejection feedback. Use Delete to remove it.', true);
+    return false;
+  }
+  const label = [r.Company, r.Role].filter(Boolean).join(' — ') || 'this job';
+  const entered = prompt('Why is ' + label + ' not a fit? This note teaches JobScout what to avoid next time.', '');
+  if (entered === null) return false;
+  const reason = entered.trim().slice(0, 500);
+  if (!reason) {
+    toast('Add a short rejection note so JobScout can learn from it.', true);
+    return false;
+  }
+
+  const isButton = control && control.tagName === 'BUTTON';
+  const isSelect = control && control.tagName === 'SELECT';
+  const run = async () => {
+    await postJSON('/api/reject', { rejected: [{ link, reason, source: 'user' }] });
+    await postJSON('/api/delete', { items: [{ id: r.id, company: r.Company || '' }] });
+    selected.delete(r.id);
+    await load();
+    toast('Rejected and saved as feedback.');
+    return true;
+  };
+
+  try {
+    if (isButton) return await withBusy(control, 'Rejecting…', run);
+    if (isSelect) control.disabled = true;
+    return await run();
+  } catch (err) {
+    toast('Error rejecting: ' + errMsg(err), true);
+    return false;
+  } finally {
+    if (isSelect) control.disabled = false;
   }
 }
 
@@ -852,9 +899,15 @@ function buildCard(r) {
   const actions = make('div', 'card-actions');
   const edit = make('button', 'ghost', 'Edit');
   edit.addEventListener('click', () => openModal(r));
+  actions.appendChild(edit);
+  if (isPotential(r)) {
+    const reject = make('button', 'ghost danger', 'Reject');
+    reject.title = 'Reject with a note so JobScout learns from it';
+    reject.addEventListener('click', () => rejectPotential(r, reject));
+    actions.appendChild(reject);
+  }
   const del = make('button', 'ghost danger', 'Delete');
   del.addEventListener('click', () => deleteIds([r.id], del));
-  actions.appendChild(edit);
   actions.appendChild(del);
   card.appendChild(actions);
   return card;
@@ -872,6 +925,11 @@ function statusSelect(r) {
   sel.style.backgroundColor = STATUS_COLORS[r.Status] || '#888';
   sel.addEventListener('change', async () => {
     const prev = r.Status;
+    if (isPotential(r) && sel.value === 'Rejected') {
+      const rejected = await rejectPotential(r, sel);
+      if (!rejected) sel.value = prev;
+      return;
+    }
     sel.disabled = true;   // freeze the control while the change is in flight
     try {
       await postJSON('/api/update', { id: r.id, field: 'Status', value: sel.value, expect: r.Company || '' });

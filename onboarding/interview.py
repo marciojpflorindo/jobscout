@@ -55,6 +55,8 @@ CONFIG_PATH = REPO_ROOT / "config.json"
 # like "library/qwen3.5:9b-mlx"). Blocks whitespace, shell metacharacters and
 # leading dashes that could be read as flags by `ollama pull`.
 VALID_TAG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 # CV extensions we accept and copy in (stored gitignored at the repo root).
 CV_EXTS = (".pdf", ".txt", ".md", ".docx")
@@ -203,10 +205,23 @@ def _show_suggestions(label: str, items: list[assist.Suggestion]) -> None:
         return
     print(f"\n{label}:")
     for i, item in enumerate(items, 1):
-        if item.reason:
-            print(f"  {i}. {item.text} — {item.reason}")
+        text = _terminal_text(item.text)
+        reason = _terminal_text(item.reason)
+        if reason:
+            print(f"  {i}. {text} — {reason}")
         else:
-            print(f"  {i}. {item.text}")
+            print(f"  {i}. {text}")
+
+
+def _terminal_text(value) -> str:
+    """Strip terminal control bytes from hostile local-model text."""
+    text = ANSI_ESCAPE.sub("", str(value or ""))
+    text = CONTROL_CHARS.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _suggestion_texts(items: list[assist.Suggestion]) -> list[str]:
+    return [text for text in (_terminal_text(s.text) for s in items) if text]
 
 
 def _with_progress(message: str, fn):
@@ -289,9 +304,9 @@ def _offer_profile_help(a: Answers, model_tag: str) -> list[str]:
         "\nReplace your target roles/paths with the suggested wording?",
         default_yes=False,
     ):
-        a.target_paths = [s.text for s in result.target_paths]
+        a.target_paths = _suggestion_texts(result.target_paths)
 
-    return [s.text for s in result.search_terms] or fallback
+    return _suggestion_texts(result.search_terms) or fallback
 
 
 def _ask_search_terms(step: Stepper, defaults: list[str]) -> list[str]:

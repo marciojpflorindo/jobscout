@@ -122,9 +122,9 @@ The dashboard has three top-level views:
 
 - **⭐ Review** — the Potential jobs the search just found, waiting for your call.
   The count badge shows how many are left to triage. Keep the good ones by moving
-  them to **Applied** (or any later status); **reject with a note** when one isn't
-  right — that note teaches the next search to down-rank similar jobs, so matches
-  improve over time.
+  them to **Applied** (or any later status); use **Reject** to add a note when one
+  isn't right — that note teaches the next search to down-rank similar jobs, so
+  matches improve over time.
 - **🏢 Applications** — the readable company/job list for everything you've kept,
   with search, sort, filters, and status changes.
 - **📊 Tracker** — charts and summary stats for jobs you've applied to, tracked

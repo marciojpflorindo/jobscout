@@ -4,6 +4,7 @@ profile.md / config.json rendering (no TTY)."""
 import unittest
 
 import pathsetup  # noqa: F401
+import interview as I
 import models as M
 import profile_template as PT
 
@@ -99,6 +100,14 @@ class TestBuildConfig(unittest.TestCase):
         block = {"enabled": True, "server": "https://ntfy.sh", "topic": "jobscout-abc"}
         cfg = PT.build_config(PT.Answers(search_terms=["x"]), "m", None, block)
         self.assertEqual(cfg["ntfy"], block)
+
+
+class TestTerminalText(unittest.TestCase):
+    def test_terminal_text_strips_ansi_and_control_chars(self):
+        self.assertEqual(
+            I._terminal_text("Tech\x1b[31mWriter\n\x00API"),
+            "TechWriter API",
+        )
 
 
 if __name__ == "__main__":

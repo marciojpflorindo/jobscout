@@ -38,7 +38,7 @@ def _clip(v, n):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "JobScout/2.0"
+    server_version = "JobScout/1.5"
 
     # Quieter logging: one line per request, no client noise to stderr spam.
     def log_message(self, fmt, *args):
