@@ -6,16 +6,17 @@
 # judges, and publishes matches to the dashboard), then opens the dashboard in your
 # browser so you can review. The dashboard keeps running until you press Ctrl-C.
 #
-# First, run install.command once (it builds the sandbox and sets up your profile).
+# First, run 1-install.command once (it builds the sandbox and sets up your profile).
 #
 # Just open the dashboard to look at it, WITHOUT running a new search:
-#   ./search-jobs.command --no-search   (alias: --view)  — this is what open-dashboard.command runs
+#   ./2-search-jobs.command --no-search   (alias: --view)  — this is what 3-open-dashboard.command runs
 # Settings, without searching:
-#   ./search-jobs.command --setup     re-run the whole interview
-#   ./search-jobs.command --add-cv    add or replace just your CV
+#   ./2-search-jobs.command --setup     re-run the whole interview
+#   ./2-search-jobs.command --assist-profile  re-run with optional local-model help
+#   ./2-search-jobs.command --add-cv    add or replace just your CV
 # Extra search options are forwarded to the brain, e.g.:
-#   ./search-jobs.command --dry-run   judge but don't publish
-#   ./search-jobs.command --top 10    cap how many postings are judged
+#   ./2-search-jobs.command --dry-run   judge but don't publish
+#   ./2-search-jobs.command --top 10    cap how many postings are judged
 #
 # Threat model: runs on the user's own Mac, double-clicked. Inputs are the local
 # environment, config.json (user-written), and pass-through flags — all trusted.
@@ -35,12 +36,12 @@ rule
 
 # --- settings-only modes: run onboarding and exit (no search) ---------------
 case "${1:-}" in
-    --setup|--add-cv)
+    --setup|--assist-profile|--add-cv)
         if [[ ! -x "$PYBIN" ]]; then
             die "JobScout isn't installed yet." \
-                "Double-click install.command first."
+                "Double-click 1-install.command first."
         fi
-        "$PYBIN" onboarding/interview.py "$1" || true
+        "$PYBIN" onboarding/interview.py "$1"
         exit 0
         ;;
 esac
@@ -57,16 +58,16 @@ esac
 
 check_arch
 
-# Must be installed first (install.command builds .venv). A search also needs the
+# Must be installed first (1-install.command builds .venv). A search also needs the
 # profile; viewing the dashboard does not, so only require it when we'll search.
 if [[ ! -x "$PYBIN" ]]; then
     die "JobScout isn't set up yet." \
-        "Double-click install.command first — it builds the sandbox and runs the interview."
+        "Double-click 1-install.command first — it builds the sandbox and runs the interview."
 fi
 if (( ! NO_SEARCH )) && [[ ! -f "$PROFILE" ]]; then
     die "JobScout isn't set up yet." \
-        "Double-click install.command first — it builds the sandbox and runs the interview." \
-        "Then double-click search-jobs.command to search for jobs."
+        "Double-click 1-install.command first — it builds the sandbox and runs the interview." \
+        "Then double-click 2-search-jobs.command to search for jobs."
 fi
 
 # Ollama and keep-awake are only for the search. Viewing the dashboard needs neither.

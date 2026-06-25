@@ -1,5 +1,5 @@
-"""Onboarding pure logic: RAM->model recommendation and the deterministic
-profile.md / config.json rendering (no LLM, no TTY)."""
+"""Onboarding pure logic: RAM->model recommendation and deterministic
+profile.md / config.json rendering (no TTY)."""
 
 import unittest
 

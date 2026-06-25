@@ -1,4 +1,4 @@
-# Shared helpers for install.command and search-jobs.command.
+# Shared helpers for 1-install.command and 2-search-jobs.command.
 #
 # This file is SOURCED, not executed — the caller has already `cd`'d into the
 # repo root and set `set -euo pipefail`. It only defines variables and functions.
@@ -87,7 +87,7 @@ check_ollama() {
     fi
 }
 
-# --- venv setup (install.command) -------------------------------------------
+# --- venv setup (1-install.command) -----------------------------------------
 
 # Create the venv and install pinned deps. Idempotent: skipped once .venv exists.
 # Requires PY (call find_python first).
@@ -109,13 +109,13 @@ ensure_venv() {
     if ! "$PYBIN" -m pip install --disable-pip-version-check -r "$REQ"; then
         rm -rf "$VENV_DIR"   # leave no half-built sandbox behind, so a retry is clean
         die "Dependency install failed." \
-            "Check your internet connection and run install.command again." \
+            "Check your internet connection and run 1-install.command again." \
             "(The half-built sandbox was removed so the retry starts clean.)"
     fi
     say "Sandbox ready."
 }
 
-# --- dashboard helpers (search-jobs.command) --------------------------------------
+# --- dashboard helpers (2-search-jobs.command) ------------------------------------
 
 # Read dashboard_port from config.json via the venv Python (no fragile shell
 # JSON parsing). Falls back to 8765 unless the value is a usable TCP port

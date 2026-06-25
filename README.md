@@ -70,9 +70,12 @@ Double-click **`1-install.command`** in the JobScout folder (or run
 
 1. Checks your prerequisites and stops with a clear fix if anything's missing
 2. Builds a local Python sandbox (`.venv`) and installs the pinned dependencies
-3. Walks you through a short **interview** — who you are, the roles you want,
-   where you're searching, and your dealbreakers
-4. Recommends a local model for your Mac's RAM and offers to download it
+3. Recommends a local model for your Mac's RAM and offers to download it
+4. Walks you through a short **interview** — who you are, the roles you want,
+   where you're searching, and your dealbreakers. If the local model is already
+   ready, it can optionally help turn your own description into clearer target
+   roles and focused job-board search terms; if it is not ready yet, setup still
+   works and tells you how to come back.
 5. Optionally sets up **phone notifications** when a run finishes (off by
    default — see [Run notifications](#run-notifications)).
 
@@ -82,6 +85,23 @@ gitignored and never leave your machine. Nothing is uploaded anywhere.
 
 > If you'd rather not download the model during setup, decline the offer —
 > JobScout prints the exact `ollama pull …` command to run yourself later.
+
+### Search terms vs. profile
+
+During setup, JobScout asks for both **target roles/paths** and **search terms**.
+They are not the same thing:
+
+- **Target roles/paths** describe what you actually want. They go into
+  `profile.md`, where the judge can reason over nuance.
+- **Search terms** are short phrases sent to job boards to collect postings.
+  Keep them focused — usually 3–6 phrases. Too broad means noisy results; too
+  many terms makes every run slower because each phrase is searched across
+  multiple sources.
+
+If the selected local model is running and downloaded, onboarding can suggest
+search terms from your own answers. You review and edit the suggestions before
+anything is written. If the model is not ready, JobScout uses only generic
+cleanup (spacing, casing, duplicate removal) and your own wording.
 
 ## Daily loop
 
@@ -133,6 +153,12 @@ To change your profile or model later, re-run the interview:
 
 ```bash
 ./2-search-jobs.command --setup
+```
+
+To make the intent explicit when you want local-model help refining your setup:
+
+```bash
+./2-search-jobs.command --assist-profile
 ```
 
 ## Adding a CV later

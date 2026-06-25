@@ -10,7 +10,9 @@ Threat model:
     is additionally validated against a strict tag charset, so there is no
     command-injection or argument-injection ("-rf") surface. The CV path is
     resolved, checked to be an existing regular file, and copied into the repo;
-    it is never executed.
+    it is never executed. Optional setup assistance talks only to local Ollama;
+    model output is treated as hostile and validated before it can prefill any
+    prompt.
   Writes: only profile.md, config.json (repo root) and a copied cv.<ext> — all
     gitignored. Never touches git, the dashboard store, or anything outside root.
   Failure: non-interactive stdin (EOFError) and Ctrl-C exit cleanly, never with
@@ -37,6 +39,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import assist  # noqa: E402
 import hardware  # noqa: E402
 import models  # noqa: E402
 import profile_template as pt  # noqa: E402
@@ -103,8 +106,8 @@ def ask(prompt: str, default: str = "") -> str:
     return ans or default
 
 
-def ask_list(prompt: str) -> list[str]:
-    raw = ask(f"{prompt}\n(comma-separated)")
+def ask_list(prompt: str, default: list[str] | None = None) -> list[str]:
+    raw = ask(f"{prompt}\n(comma-separated)", default=", ".join(default or []))
     return [p.strip() for p in raw.split(",") if p.strip()]
 
 
@@ -192,43 +195,155 @@ def offer_pull(tag: str) -> None:
         print(f"!! The pull failed. You can retry later:\n     {pull_cmd}")
 
 
+# --- optional profile/search assistance ------------------------------------
+def _show_suggestions(label: str, items: list[assist.Suggestion]) -> None:
+    if not items:
+        return
+    print(f"\n{label}:")
+    for i, item in enumerate(items, 1):
+        if item.reason:
+            print(f"  {i}. {item.text} — {item.reason}")
+        else:
+            print(f"  {i}. {item.text}")
+
+
+def _offer_profile_help(a: Answers, model_tag: str) -> list[str]:
+    """Return suggested search terms, or [] when the user should type them from
+    scratch. Any accepted target-path refinement mutates `a.target_paths`."""
+    section("Optional setup helper")
+    print("This step is here because job-board search terms are hard to invent.")
+    print("")
+    print("Two things are different:")
+    print("- Target roles/paths describe what you want.")
+    print("- Search terms are short phrases JobScout sends to job boards to collect")
+    print("  postings. Too broad means noise; too narrow means missed jobs.")
+    print("")
+    print("The local model can suggest terms from your own answers if it is already")
+    print("running and downloaded. If not, setup still works; JobScout will use only")
+    print("your wording and you can rerun this later with ./2-search-jobs.command --setup.")
+
+    fallback = assist.seed_search_terms(a.target_paths)
+    ready, reason = assist.ollama_model_ready(model_tag, pt.OLLAMA_BASE)
+    if not ready:
+        print(f"\nLocal model help is not available yet: {reason}.")
+        if fallback:
+            print("I can still prefill search terms from the target roles you typed.")
+            _show_suggestions("Generic prefill", [assist.Suggestion(t) for t in fallback])
+        return fallback
+
+    if not ask_yes("\nUse the local model to suggest clearer roles and search terms?",
+                   default_yes=True):
+        if fallback:
+            print("OK. I will prefill from your own target-role wording instead.")
+        return fallback
+
+    result, llm_reason = assist.llm_suggest(a, model_tag, pt.OLLAMA_BASE)
+    if result is None:
+        print(f"\nThe local model could not produce usable setup suggestions: {llm_reason}.")
+        if fallback:
+            print("Falling back to your own target-role wording.")
+        return fallback
+
+    _show_suggestions("Suggested target roles/paths", result.target_paths)
+    _show_suggestions("Suggested job-board search terms", result.search_terms)
+    _show_suggestions("Details to consider mentioning later", result.profile_notes)
+
+    if result.target_paths and ask_yes(
+        "\nReplace your target roles/paths with the suggested wording?",
+        default_yes=False,
+    ):
+        a.target_paths = [s.text for s in result.target_paths]
+
+    return [s.text for s in result.search_terms] or fallback
+
+
+def _ask_search_terms(step: Stepper, defaults: list[str]) -> list[str]:
+    while True:
+        terms = ask_list(step.tag() +
+            "Search terms to feed the job boards.\n"
+            "Use 3-6 short phrases people would actually type into a job board.\n"
+            "These are only for scraping; put nuanced preferences and dealbreakers\n"
+            "in the profile questions that follow.", default=defaults)
+        cleaned = assist.clean_search_terms(terms, max_items=None)
+        notes = assist.search_term_guidance(cleaned)
+        if cleaned:
+            if cleaned != terms:
+                print("\nI cleaned spacing/casing and removed duplicates:")
+                print("  " + ", ".join(cleaned))
+            if notes:
+                print("\nQuick search-term check:")
+                for note in notes:
+                    print(f"  - {note}")
+            if len(cleaned) > assist.MAX_SEARCH_TERMS:
+                if ask_yes("Keep all of these anyway?", default_yes=False):
+                    return cleaned
+                defaults = cleaned[:assist.MAX_SEARCH_TERMS]
+                print("Let's tighten the list. Press Enter to accept the shorter default, or edit it.")
+                continue
+            return cleaned
+        print("\nJobScout needs at least one search phrase, or it has nothing to scrape.")
+
+
 # --- the interview ----------------------------------------------------------
-def run_interview() -> Answers:
+def run_interview(model_tag: str) -> Answers:
     section("Tell JobScout who you are and what you're after")
     print("Answers go only into local files. Nothing is uploaded.")
+    print("The first questions teach JobScout what to collect; later questions")
+    print("teach the judge what to keep or reject. You can edit the generated")
+    print("profile.md by hand or rerun this interview later.")
     print("Each question is one line — separate multiple points with commas.")
 
     s = Stepper(12)
     a = Answers()
     a.self_description = ask(s.tag() +
         "In one line, how do you describe yourself professionally?\n"
-        "(comma-separated, e.g. senior tech writer, 10y in fintech, docs-as-code)")
+        "Mention the work you do, domains you know, and evidence the judge should care about.\n"
+        "(comma-separated, e.g. senior technical writer, API docs, docs-as-code)")
     a.seniority = ask(s.tag() +
-        "What seniority are you targeting? (e.g. mid, senior, lead)")
+        "What seniority are you targeting?\n"
+        "This helps the judge down-rank roles that are too junior or too senior.\n"
+        "(e.g. mid, senior, lead)")
     a.target_paths = ask_list(s.tag() +
-        "List your target roles/paths, best first (e.g. Senior Backend Engineer)")
-    a.search_terms = ask_list(s.tag() +
-        "Search terms to feed the job boards (e.g. backend engineer, platform engineer)")
+        "List your target roles or paths, best first.\n"
+        "These are what you want, not necessarily exact job-board queries.\n"
+        "(e.g. Senior Backend Engineer, Developer Advocate, Technical Writer)")
+    cleaned_paths = assist.clean_target_paths(a.target_paths, max_items=None)
+    if cleaned_paths != a.target_paths:
+        print("\nI cleaned spacing/casing and removed duplicate target roles:")
+        print("  " + ", ".join(cleaned_paths))
+    a.target_paths = cleaned_paths
+    suggested_terms = _offer_profile_help(a, model_tag)
+    a.search_terms = _ask_search_terms(s, suggested_terms)
     a.country = ask(s.tag() +
         "Which country do you want to find jobs in?\n"
-        "(where you'd work — not necessarily where you live now; e.g. Mexico)")
-    a.city = ask(s.tag() + "City (optional — leave blank for country-wide / remote)")
+        "This controls the job-board search location; it can be where you'd work,\n"
+        "not necessarily where you live now. (e.g. Mexico)")
+    a.city = ask(s.tag() +
+        "City (optional).\n"
+        "Leave blank for country-wide or remote searches.")
     a.extra_countries = ask_list(s.tag() +
         "Search more than one country? Job boards search one country at a time,\n"
         "so list any OTHER countries to search too — or the shortcut 'EU' to\n"
         "cover its member countries (e.g. Canada, United States — or just: EU).\n"
         "Leave blank to search just the country above.")
     a.remote_preference = ask_choice(s.tag() +
-        "Remote preference:", pt.REMOTE_PREFS, default_index=0)
+        "Remote preference.\n"
+        "Remote-only also becomes a hard blocker in the judging profile:",
+        pt.REMOTE_PREFS, default_index=0)
     a.work_auth = ask(s.tag() +
         "Any work-authorization limit the judge should enforce on results?\n"
-        "(filters the jobs you're shown — e.g. 'US and Mexico only' — separate\n"
-        "from WHERE we search above; or blank)")
-    a.exclude_companies = ask_list(s.tag() + "Companies to exclude entirely (optional)")
+        "This filters what you are shown after scraping. It is separate from WHERE\n"
+        "JobScout searches above. (e.g. 'US and Mexico only', or blank)")
+    a.exclude_companies = ask_list(s.tag() +
+        "Companies to exclude entirely (optional).\n"
+        "Use this only for companies you never want to see.")
     a.avoid_industries = ask_list(s.tag() +
-        "Industries to avoid (e.g. gambling, adtech) (optional)")
+        "Industries to avoid (optional).\n"
+        "These become strong negative signals or hard blockers for the judge.\n"
+        "(e.g. gambling, adtech)")
     a.instant_no = ask(s.tag() +
         "What makes a job an instant no?\n"
+        "Use plain language. These become Tier-A hard blockers in profile.md.\n"
         "(comma-separated, e.g. on-site only, no visa sponsorship, adtech)")
     return a
 
@@ -238,7 +353,7 @@ def capture_cv() -> str | None:
     stored relative path, or None if skipped/unusable."""
     section("CV (optional)")
     print("Supply a CV to also get a CV-fit score on each job.")
-    print("You can add one later with  ./search-jobs.command --add-cv  — leave blank to skip.")
+    print("You can add one later with  ./2-search-jobs.command --add-cv  — leave blank to skip.")
     print("")
     print("Tip: Markdown, TXT, or DOCX score most reliably; born-digital PDFs work")
     print("too, but a scanned/image-only PDF can't be read and won't be scored.")
@@ -339,7 +454,7 @@ def write_outputs(answers: Answers, model_tag: str, cv_path: str | None,
     section("Done")
     print(f"  Wrote {PROFILE_PATH.name}  (your judging brief — hand-editable)")
     print(f"  Wrote {CONFIG_PATH.name}  (model + search settings the brain reads)")
-    print("  Both are gitignored. Re-run `./search-jobs.command --setup` to change them.")
+    print("  Both are gitignored. Re-run `./2-search-jobs.command --setup` to change them.")
 
 
 def add_cv_only() -> int:
@@ -347,8 +462,8 @@ def add_cv_only() -> int:
     cv_path in the existing config.json and leaves every other setting (and
     profile.md) untouched."""
     if not CONFIG_PATH.exists():
-        print("JobScout isn't set up yet — run install.command first "
-              "(or `./search-jobs.command --setup`).")
+        print("JobScout isn't set up yet — run 1-install.command first "
+              "(or `./2-search-jobs.command --setup`).")
         return 1
     try:
         config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -375,6 +490,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="JobScout first-run interview.")
     parser.add_argument("--setup", action="store_true",
                         help="explicitly re-run onboarding (confirms before overwriting)")
+    parser.add_argument("--assist-profile", action="store_true",
+                        help="re-run onboarding with optional local-model setup help")
     parser.add_argument("--add-cv", action="store_true",
                         help="add or replace just the CV, keeping the rest of your setup")
     args = parser.parse_args(argv)
@@ -387,7 +504,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.add_cv:
             return add_cv_only()
         if PROFILE_PATH.exists():
-            who = "--setup re-run" if args.setup else "existing profile found"
+            if args.assist_profile:
+                who = "assisted profile refinement"
+            else:
+                who = "--setup re-run" if args.setup else "existing profile found"
             print(f"\nA profile already exists ({who}).")
             if not ask_yes("Overwrite it and redo onboarding?", default_yes=False):
                 print("Keeping your existing profile. Nothing changed.")
@@ -396,7 +516,7 @@ def main(argv: list[str] | None = None) -> int:
         hw = hardware.detect()
         report_hardware(hw)
         model_tag = select_model(hw)
-        answers = run_interview()
+        answers = run_interview(model_tag)
         cv_path = capture_cv()
         ntfy = configure_ntfy()
         write_outputs(answers, model_tag, cv_path, ntfy)
