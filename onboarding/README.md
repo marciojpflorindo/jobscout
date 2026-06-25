@@ -1,26 +1,30 @@
 # onboarding/
 
 First-run interview + model selection (Python, stdlib only). Collects who you
-are and what you're looking for, writes a templated `profile.md` and a
-machine-readable `config.json`, detects your Mac's RAM, recommends an Ollama
-model that fits, and offers to download it.
+are and what you're looking for, can optionally use the local Ollama model to
+suggest clearer target-role/search-term wording, writes a templated `profile.md`
+and a machine-readable `config.json`, detects your Mac's RAM, recommends an
+Ollama model that fits, and offers to download it.
 
 ## Run it
 
 ```bash
 python3 onboarding/interview.py          # first run, or redo the interview
 python3 onboarding/interview.py --setup   # explicit re-run (confirms first)
+python3 onboarding/interview.py --assist-profile  # same interview, clearer intent
 ```
 
-`search-jobs.command` runs this automatically on first launch (wired in Phase 6).
+`1-install.command` runs this automatically during setup; rerun it later with
+`./2-search-jobs.command --setup`.
 
 ## What it produces (both gitignored, at the repo root)
 
 - **`profile.md`** — the human-readable judging brief the brain reads. Mirrors
   the legacy `job-finder-brief.md` structure (who-this-is-for, ranked target
-  paths, Tier-A hard blockers, Tier-B judge-by-duties, 0–100 rubric). Built
-  deterministically from your answers — no LLM call. Hand-edit it any time; the
-  next brain run uses the edited file.
+  paths, Tier-A hard blockers, Tier-B judge-by-duties, 0–100 rubric). Rendered
+  deterministically from your final answers. Optional local-model help can
+  suggest wording before you answer, but you review/edit everything before it is
+  written. Hand-edit it any time; the next brain run uses the edited file.
 - **`config.json`** — machine settings the brain consumes: chosen model tag,
   JobSpy search params (queries / country / city / remote preference /
   seniority), optional CV path, dashboard port, and the advanced-source slots
@@ -40,6 +44,7 @@ You can override with your own tag (shown as untested). Intel Macs and
 
 - `hardware.py` — Apple-Silicon + total-RAM detection (degrades to "unknown").
 - `models.py` — pinned model tiers + RAM → recommendation (pure).
+- `assist.py` — optional local-Ollama setup help + generic search-term cleanup.
 - `profile_template.py` — answers → `profile.md` + `config.json` (pure).
 - `interview.py` — the interactive orchestrator + `main()`/`--setup`.
 

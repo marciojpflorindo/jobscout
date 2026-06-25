@@ -18,16 +18,18 @@ const POSITIVE = ['In conversation', 'Interviewing', 'Offer', 'Accepted'];
 
 // "Potential" = a brain candidate not yet applied to. It is NOT a real application:
 // excluded from the KPIs/charts, and shown in its own "Review" tab. Keeping a job =
-// change its Status to "Applied", which moves it into the "Tracker" tab.
+// changing its Status to "Applied", which moves it into Applications and Tracker stats.
 const POTENTIAL = 'Potential';
 // Real applications only (everything that isn't a pending candidate).
 function appRows() { return DATA.rows.filter((r) => r.Status !== POTENTIAL); }
 function potentialRows() { return DATA.rows.filter((r) => r.Status === POTENTIAL); }
+function isPotential(r) { return r && r.Status === POTENTIAL; }
 
-// Two views, one per tab. "review" = triage the Potential queue; "tracker" = manage
-// applied jobs + see the stats. The default is picked once on first load (Review when
-// there are candidates to triage, else Tracker) and then left to the user's clicks, so
-// a background reload never yanks them out of the tab they're working in.
+// Three views: "tracker" = KPIs/charts, "companies" = real application list,
+// "review" = triage the Potential queue. The default is picked once on first load
+// (Review when there are candidates to triage, else Tracker when there are saved
+// applications, else Applications) and then left to the user's clicks, so a
+// background reload never yanks them out of the view they're using.
 let VIEW = 'tracker';
 let viewInitialized = false;
 
@@ -156,21 +158,18 @@ async function load() {
     + ' · ' + new Date().toLocaleString();
   // First load only: land on whichever tab has something to do.
   if (!viewInitialized) {
-    VIEW = potentialRows().length > 0 ? 'review' : 'tracker';
+    VIEW = potentialRows().length > 0 ? 'review' : (nApp > 0 ? 'tracker' : 'companies');
     viewInitialized = true;
   }
-  applyView();
-  // Charts/KPIs/stale only need rendering when the Tracker chrome is actually visible
-  // (Chart.js sizes to its container, so painting into a hidden one would mis-size it).
-  if (trackerChromeVisible()) renderTracker();
+  renderTabs();
+  renderChrome();
   renderList();
 }
 
-// KPIs + charts + stale list — the Tracker-only chrome.
+// KPIs + charts — the Tracker-only chrome.
 function renderTracker() {
   renderKpis();
   renderCharts();
-  renderStale();
 }
 
 function wireEvents() {
@@ -192,8 +191,9 @@ function wireEvents() {
   // that scrolled out of view under a filter/search.
   $('#search').addEventListener('input', () => { selected.clear(); renderList(); });
   $('#filter-status').addEventListener('change', () => { selected.clear(); renderList(); });
-  $('#tab-review').addEventListener('click', () => setView('review'));
   $('#tab-tracker').addEventListener('click', () => setView('tracker'));
+  $('#tab-companies').addEventListener('click', () => setView('companies'));
+  $('#tab-review').addEventListener('click', () => setView('review'));
   $('#sort').addEventListener('change', () => {
     const p = SORT_PRESETS[$('#sort').value];
     if (p) SORT = Object.assign({}, p);
@@ -215,7 +215,7 @@ function wireEvents() {
   DESKTOP_MQ.addEventListener('change', renderList);
   // Repaint charts when the OS theme flips while in "auto".
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if ((localStorage.getItem('theme') || 'auto') === 'auto' && window.Chart) renderCharts();
+    if ((localStorage.getItem('theme') || 'auto') === 'auto') repaintCharts();
   });
 }
 
@@ -233,40 +233,51 @@ function applyTheme(t) {
 function cycleTheme() {
   const cur = (function () { try { return localStorage.getItem('theme'); } catch (e) { return null; } })() || 'auto';
   applyTheme(THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length]);
-  if (window.Chart) renderCharts(); // colors come from CSS vars at draw time
+  repaintCharts(); // colors come from CSS vars at draw time
 }
 
-// --- Tabs / views -----------------------------------------------------------
-// The Tracker chrome shows only in the Tracker tab AND once there's at least one
-// application — so a fresh scrape (all Potential) never greets the user with empty
-// charts; they see the Review queue instead.
-function trackerChromeVisible() { return VIEW === 'tracker' && appRows().length > 0; }
-
-// Reflect VIEW in the DOM: active tab, the Review count badge, and what's visible.
-function applyView() {
+// --- View switch ------------------------------------------------------------
+function renderTabs() {
   const review = VIEW === 'review';
+  const tracker = VIEW === 'tracker';
+  const companies = VIEW === 'companies';
   const n = potentialRows().length;
   const badge = $('#tab-review-count');
   badge.textContent = String(n);
   badge.hidden = n === 0;
-  [['#tab-review', review], ['#tab-tracker', !review]].forEach(([sel, on]) => {
-    const t = $(sel);
-    t.classList.toggle('active', on);
-    t.setAttribute('aria-pressed', on ? 'true' : 'false');
-  });
-  $('#tracker-only').hidden = !trackerChromeVisible();
-  // A status filter only makes sense over the mixed Tracker pipeline.
-  $('#filter-status').hidden = review;
+  $('#tab-tracker').setAttribute('aria-pressed', tracker ? 'true' : 'false');
+  $('#tab-companies').setAttribute('aria-pressed', companies ? 'true' : 'false');
+  $('#tab-review').setAttribute('aria-pressed', review ? 'true' : 'false');
+  // A status filter only makes sense over the Applications list.
+  $('#filter-status').hidden = !companies;
+}
+
+function renderChrome() {
+  const hasApps = appRows().length > 0;
+  const showTracker = VIEW === 'tracker' && hasApps;
+  const showCompanies = VIEW === 'companies' && hasApps;
+  const showList = VIEW === 'companies' || VIEW === 'review';
+  $('#tracker-only').hidden = !showTracker;
+  $('#stale').hidden = !showCompanies;
+  $('.list-controls').hidden = !showList;
+  $('#list').hidden = !showList;
+  if (showTracker) renderTracker();
+  else Object.keys(charts).forEach((k) => { charts[k].destroy(); delete charts[k]; });
+  if (showCompanies) renderStale();
+}
+
+function repaintCharts() {
+  if (window.Chart && VIEW === 'tracker' && appRows().length > 0) renderCharts();
 }
 
 // Switch tabs. Clears the (positional) selection so a later batch action can't hit
 // rows from the other view; keeps the search box so a query carries across.
 function setView(view) {
-  if (view !== 'review' && view !== 'tracker' || view === VIEW) return;
+  if (['tracker', 'companies', 'review'].indexOf(view) === -1 || view === VIEW) return;
   VIEW = view;
   selected.clear();
-  applyView();
-  if (trackerChromeVisible()) renderTracker();
+  renderTabs();
+  renderChrome();
   renderList();
 }
 
@@ -408,10 +419,11 @@ function sortVal(r, key, type) {
 
 function visibleRows() {
   const q = $('#search').value.trim().toLowerCase();
-  // The tab picks the universe: Review = the Potential queue, Tracker = real
-  // applications (optionally narrowed by the status filter). Search applies to both.
+  // The view picks the universe: Review = Potential queue, Applications = real
+  // applications. Tracker has no list. Search applies to Review and Applications.
+  if (VIEW === 'tracker') return [];
   const base = VIEW === 'review' ? potentialRows() : appRows();
-  const fe = VIEW === 'review' ? '' : $('#filter-status').value;
+  const fe = VIEW === 'companies' ? $('#filter-status').value : '';
   let rows = base.filter((r) => {
     if (fe && r.Status !== fe) return false;
     if (q && (DATA.columns || []).map((c) => r[c] || '').join(' ').toLowerCase().indexOf(q) === -1) return false;
@@ -439,9 +451,16 @@ function setSort(field, type) {
 }
 
 function renderList() {
+  const listMode = VIEW === 'companies' || VIEW === 'review';
   const rows = visibleRows();
   const host = $('#list');
   host.textContent = '';
+  if (!listMode) {
+    $('#count').textContent = '';
+    $('#empty').hidden = true;
+    renderSelBar();
+    return;
+  }
   if (DESKTOP_MQ.matches) {
     host.className = '';
     host.appendChild(buildTable(rows));
@@ -462,7 +481,7 @@ function listEmptyMessage() {
   const searching = $('#search').value.trim() !== '';
   if (VIEW === 'review') {
     if (potentialRows().length === 0) {
-      return 'All caught up — no jobs to review. Kept jobs are in the Tracker tab; run a search to find more.';
+      return 'All caught up — no jobs to review. Kept jobs are in Applications; run a search to find more.';
     }
     return 'No potential jobs match your search.';
   }
@@ -545,8 +564,8 @@ function goToRow(r) {
   $('#search').value = '';
   $('#filter-status').value = '';
   selected.clear();
-  // Stale suggestions only live in the Tracker, but be explicit so the jump lands.
-  if (VIEW !== 'tracker') { VIEW = 'tracker'; applyView(); if (trackerChromeVisible()) renderTracker(); }
+  // Stale suggestions live in Applications, so be explicit and make the row visible.
+  if (VIEW !== 'companies') { VIEW = 'companies'; renderTabs(); renderChrome(); }
   renderList();
   const el = $('#list').querySelector('[data-row-id="' + r.id + '"]');
   if (!el) return;
@@ -682,9 +701,15 @@ function rowActions(r) {
   const d = make('td', 'row-actions');
   const edit = make('button', 'ghost mini', 'Edit');
   edit.addEventListener('click', () => openModal(r));
+  d.appendChild(edit);
+  if (isPotential(r)) {
+    const reject = make('button', 'ghost mini danger', 'Reject');
+    reject.title = 'Reject with a note so JobScout learns from it';
+    reject.addEventListener('click', () => rejectPotential(r, reject));
+    d.appendChild(reject);
+  }
   const del = make('button', 'ghost mini danger', 'Delete');
   del.addEventListener('click', () => deleteIds([r.id], del));
-  d.appendChild(edit);
   d.appendChild(del);
   return d;
 }
@@ -766,19 +791,69 @@ function beginEdit(node, r, field, type, opts) {
 async function deleteIds(ids, btn) {
   ids = (ids || []).filter((id) => id != null && DATA.rows[id]);
   if (!ids.length) return;
+  const one = ids.length === 1 ? DATA.rows[ids[0]] : null;
+  const noun = one ? (isPotential(one) ? 'candidate' : 'application') : 'item';
   const msg = ids.length === 1
-    ? 'Delete this application?'
-    : 'Delete ' + ids.length + ' applications? This cannot be undone.';
+    ? 'Delete this ' + noun + '?'
+    : 'Delete ' + ids.length + ' items? This cannot be undone.';
   if (!confirm(msg)) return;
   const items = ids.map((id) => ({ id, company: DATA.rows[id].Company || '' }));
   try {
     const res = await withBusy(btn, 'Deleting…', () => postJSON('/api/delete', { items }));
     await load();
     const n = (res && res.removed != null) ? res.removed : ids.length;
-    toast(n === 1 ? 'Application deleted.' : n + ' applications deleted.');
+    toast(n === 1 ? (isPotential(one) ? 'Candidate deleted.' : 'Application deleted.') : n + ' items deleted.');
   } catch (err) {
     toast('Error deleting: ' + errMsg(err), true);
   }
+}
+
+async function rejectPotential(r, control) {
+  const link = String(r['Job link'] || '').trim();
+  const label = [r.Company, r.Role].filter(Boolean).join(' — ') || 'this job';
+  const entered = prompt('Why is ' + label + ' not a fit? This note teaches JobScout what to avoid next time.', '');
+  if (entered === null) return false;
+  const reason = entered.trim().slice(0, 500);
+  if (!reason) {
+    toast('Add a short rejection note so JobScout can learn from it.', true);
+    return false;
+  }
+
+  const isButton = control && control.tagName === 'BUTTON';
+  const isSelect = control && control.tagName === 'SELECT';
+  const run = async () => {
+    await postJSON('/api/update', { id: r.id, field: 'Notes', value: rejectionNotes(r, reason), expect: r.Company || '' });
+    await postJSON('/api/update', { id: r.id, field: 'Status', value: 'Rejected', expect: r.Company || '' });
+    if (/^https?:\/\//i.test(link)) {
+      try {
+        await postJSON('/api/reject', { rejected: [{ link, reason, source: 'user' }] });
+      } catch (err) {
+        // The row itself now carries the rejection note for /api/links; the ledger
+        // is a best-effort backup if the row is deleted later.
+      }
+    }
+    selected.delete(r.id);
+    await load();
+    toast('Rejected and kept in your tracker.');
+    return true;
+  };
+
+  try {
+    if (isButton) return await withBusy(control, 'Rejecting…', run);
+    if (isSelect) control.disabled = true;
+    return await run();
+  } catch (err) {
+    toast('Error rejecting: ' + errMsg(err), true);
+    return false;
+  } finally {
+    if (isSelect) control.disabled = false;
+  }
+}
+
+function rejectionNotes(r, reason) {
+  const current = String((r && r.Notes) || '').trim();
+  const line = 'Rejected: ' + reason;
+  return current ? line + '\n\n' + current : line;
 }
 
 function buildCard(r) {
@@ -834,9 +909,15 @@ function buildCard(r) {
   const actions = make('div', 'card-actions');
   const edit = make('button', 'ghost', 'Edit');
   edit.addEventListener('click', () => openModal(r));
+  actions.appendChild(edit);
+  if (isPotential(r)) {
+    const reject = make('button', 'ghost danger', 'Reject');
+    reject.title = 'Reject with a note so JobScout learns from it';
+    reject.addEventListener('click', () => rejectPotential(r, reject));
+    actions.appendChild(reject);
+  }
   const del = make('button', 'ghost danger', 'Delete');
   del.addEventListener('click', () => deleteIds([r.id], del));
-  actions.appendChild(edit);
   actions.appendChild(del);
   card.appendChild(actions);
   return card;
@@ -854,6 +935,11 @@ function statusSelect(r) {
   sel.style.backgroundColor = STATUS_COLORS[r.Status] || '#888';
   sel.addEventListener('change', async () => {
     const prev = r.Status;
+    if (isPotential(r) && sel.value === 'Rejected') {
+      const rejected = await rejectPotential(r, sel);
+      if (!rejected) sel.value = prev;
+      return;
+    }
     sel.disabled = true;   // freeze the control while the change is in flight
     try {
       await postJSON('/api/update', { id: r.id, field: 'Status', value: sel.value, expect: r.Company || '' });

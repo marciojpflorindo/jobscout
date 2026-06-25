@@ -1,5 +1,7 @@
 # JobScout
 
+**Current version:** v1.5 · See [CHANGELOG.md](CHANGELOG.md) for what changed.
+
 > A local-first job-search tool for macOS. A script finds jobs that
 > fit your preferences, then a local LLM *judges* job
 > postings against a profile you build in a first-run interview, and a local
@@ -70,9 +72,12 @@ Double-click **`1-install.command`** in the JobScout folder (or run
 
 1. Checks your prerequisites and stops with a clear fix if anything's missing
 2. Builds a local Python sandbox (`.venv`) and installs the pinned dependencies
-3. Walks you through a short **interview** — who you are, the roles you want,
-   where you're searching, and your dealbreakers
-4. Recommends a local model for your Mac's RAM and offers to download it
+3. Recommends a local model for your Mac's RAM and offers to download it
+4. Walks you through a short **interview** — who you are, the roles you want,
+   where you're searching, and your dealbreakers. If the local model is already
+   ready, it can optionally help turn your own description into clearer target
+   roles and focused job-board search terms; if it is not ready yet, setup still
+   works and tells you how to come back.
 5. Optionally sets up **phone notifications** when a run finishes (off by
    default — see [Run notifications](#run-notifications)).
 
@@ -82,6 +87,23 @@ gitignored and never leave your machine. Nothing is uploaded anywhere.
 
 > If you'd rather not download the model during setup, decline the offer —
 > JobScout prints the exact `ollama pull …` command to run yourself later.
+
+### Search terms vs. profile
+
+During setup, JobScout asks for both **target roles/paths** and **search terms**.
+They are not the same thing:
+
+- **Target roles/paths** describe what you actually want. They go into
+  `profile.md`, where the judge can reason over nuance.
+- **Search terms** are short phrases sent to job boards to collect postings.
+  Keep them focused — usually 3–6 phrases. Too broad means noisy results; too
+  many terms makes every run slower because each phrase is searched across
+  multiple sources.
+
+If the selected local model is running and downloaded, onboarding can suggest
+search terms from your own answers. You review and edit the suggestions before
+anything is written. If the model is not ready, JobScout uses only generic
+cleanup (spacing, casing, duplicate removal) and your own wording.
 
 ## Daily loop
 
@@ -96,18 +118,21 @@ Once you're set up, **make sure Ollama is running**, then double-click
 3. Opens the dashboard in your browser to review, and keeps it running until you
    press **Ctrl-C**.
 
-The dashboard has two tabs:
+The dashboard has three top-level views:
 
 - **⭐ Review** — the Potential jobs the search just found, waiting for your call.
   The count badge shows how many are left to triage. Keep the good ones by moving
-  them to **Applied** (or any later status); **reject with a note** when one isn't
-  right — that note teaches the next search to down-rank similar jobs, so matches
-  improve over time.
-- **📊 Tracker** — every job you've applied to, with your stats and charts, tracked
+  them to **Applied** (or any later status); use **Reject** to add a note when one
+  isn't right — that note teaches the next search to down-rank similar jobs, so
+  matches improve over time.
+- **🏢 Applications** — the readable company/job list for everything you've kept,
+  with search, sort, filters, and status changes.
+- **📊 Tracker** — charts and summary stats for jobs you've applied to, tracked
   through its status lifecycle: Applied → In conversation → Interviewing → Offer → … .
 
 After a fresh search you'll land on **Review** (that's where the new jobs are); once
-you've triaged them, switch to **Tracker** to manage your pipeline.
+you've triaged them, use **Applications** for the day-to-day list and **Tracker**
+for the big-picture view.
 
 > Don't want to watch the terminal? Turn on [run notifications](#run-notifications)
 > and JobScout pings your phone when each run finishes.
@@ -123,6 +148,10 @@ Search options are forwarded to the brain, for example `./2-search-jobs.command 
 (judge without publishing) or `./2-search-jobs.command --top 10` (cap how many postings
 are judged).
 
+By default, one run judges up to 30 new candidates. Jobs already sitting in
+Review stay there until you either keep them or reject them, so seeing the same
+Review queue again is normal if you have not triaged it yet.
+
 > **Your results are never lost.** Each run writes its judged matches to a local
 > outbox *before* sending them to the dashboard. If the dashboard is unreachable,
 > the matches are kept and published automatically on the next run — so a hiccup
@@ -133,6 +162,12 @@ To change your profile or model later, re-run the interview:
 
 ```bash
 ./2-search-jobs.command --setup
+```
+
+To make the intent explicit when you want local-model help refining your setup:
+
+```bash
+./2-search-jobs.command --assist-profile
 ```
 
 ## Adding a CV later

@@ -6,7 +6,7 @@
 # the pinned dependencies, and walks you through the first-run interview. When it
 # finishes you'll have a profile.md + config.json and be ready to search.
 #
-# After this, use search-jobs.command to actually search for jobs and open the dashboard.
+# After this, use 2-search-jobs.command to actually search for jobs and open the dashboard.
 #
 # Threat model: runs on the user's own Mac, double-clicked. The only inputs are
 # the local environment and the interactive interview answers — all trusted. Every
@@ -35,11 +35,12 @@ header "Set up your profile"
 say "A few quick questions so the model knows what to look for."
 if ! "$PYBIN" onboarding/interview.py; then
     die "Onboarding didn't finish, so there's no profile yet." \
-        "Run install.command again to retry the interview."
+        "Run 1-install.command again to retry the interview."
 fi
 
 header "Setup complete."
-say "Next: double-click search-jobs.command to search for jobs and open your dashboard."
+say "Next: double-click 2-search-jobs.command to search for jobs and open your dashboard."
 say ""
-say "Re-run the interview any time:  ./search-jobs.command --setup"
-say "Add (or replace) a CV later:    ./search-jobs.command --add-cv"
+say "Re-run the interview any time:  ./2-search-jobs.command --setup"
+say "Refine with local-model help:  ./2-search-jobs.command --assist-profile"
+say "Add (or replace) a CV later:    ./2-search-jobs.command --add-cv"
