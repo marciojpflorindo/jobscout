@@ -33,6 +33,8 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -207,20 +209,52 @@ def _show_suggestions(label: str, items: list[assist.Suggestion]) -> None:
             print(f"  {i}. {item.text}")
 
 
+def _with_progress(message: str, fn):
+    """Run a blocking local-model call while printing plain terminal progress."""
+    print(f"\n{message}", flush=True)
+    done = threading.Event()
+
+    def pulse() -> None:
+        elapsed = 0
+        if done.wait(5):
+            return
+        elapsed = 5
+        while not done.is_set():
+            print(f"  Still working locally ({elapsed}s elapsed)...", flush=True)
+            if done.wait(10):
+                return
+            elapsed += 10
+
+    thread = threading.Thread(target=pulse, daemon=True)
+    thread.start()
+    start = time.monotonic()
+    try:
+        return fn()
+    finally:
+        done.set()
+        thread.join(timeout=0.2)
+        elapsed = round(time.monotonic() - start)
+        print(f"  Local model call finished in {elapsed}s.", flush=True)
+
+
 def _offer_profile_help(a: Answers, model_tag: str) -> list[str]:
     """Return suggested search terms, or [] when the user should type them from
     scratch. Any accepted target-path refinement mutates `a.target_paths`."""
     section("Optional setup helper")
-    print("This step is here because job-board search terms are hard to invent.")
+    print("Job-board search terms are hard to invent, so JobScout can help here.")
     print("")
-    print("Two things are different:")
-    print("- Target roles/paths describe what you want.")
-    print("- Search terms are short phrases JobScout sends to job boards to collect")
-    print("  postings. Too broad means noise; too narrow means missed jobs.")
+    print("Target roles/paths describe what you want.")
     print("")
-    print("The local model can suggest terms from your own answers if it is already")
-    print("running and downloaded. If not, setup still works; JobScout will use only")
-    print("your wording and you can rerun this later with ./2-search-jobs.command --setup.")
+    print("Search terms are different: they are short phrases JobScout sends to")
+    print("job boards to collect postings. Too broad means noise; too narrow means")
+    print("missed jobs.")
+    print("")
+    print("If the selected local model is running and downloaded, it can suggest")
+    print("clearer roles and search terms from your own answers. You review and edit")
+    print("everything before it is written.")
+    print("")
+    print("If the model is not ready yet, setup still works. JobScout will use your")
+    print("own wording and you can rerun this later with ./2-search-jobs.command --setup.")
 
     fallback = assist.seed_search_terms(a.target_paths)
     ready, reason = assist.ollama_model_ready(model_tag, pt.OLLAMA_BASE)
@@ -237,7 +271,10 @@ def _offer_profile_help(a: Answers, model_tag: str) -> list[str]:
             print("OK. I will prefill from your own target-role wording instead.")
         return fallback
 
-    result, llm_reason = assist.llm_suggest(a, model_tag, pt.OLLAMA_BASE)
+    result, llm_reason = _with_progress(
+        "Asking the local model for setup suggestions. This can take 10-90 seconds.",
+        lambda: assist.llm_suggest(a, model_tag, pt.OLLAMA_BASE),
+    )
     if result is None:
         print(f"\nThe local model could not produce usable setup suggestions: {llm_reason}.")
         if fallback:

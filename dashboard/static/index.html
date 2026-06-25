@@ -27,18 +27,23 @@
       </div>
     </header>
 
-    <nav class="tabs" aria-label="Views">
-      <button id="tab-review" class="tab" type="button" aria-pressed="false"
+    <div class="view-tabs" role="group" aria-label="Views">
+      <button id="tab-tracker" class="view-tab" type="button" aria-pressed="false"
+              title="Stats and charts for jobs you've applied to">
+        <span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">Tracker</span>
+      </button>
+      <button id="tab-companies" class="view-tab" type="button" aria-pressed="false"
+              title="Jobs you've applied to — your company list and pipeline">
+        <span class="tab-icon" aria-hidden="true">🏢</span><span class="tab-label">Applications</span>
+      </button>
+      <button id="tab-review" class="view-tab" type="button" aria-pressed="false"
               title="Potential jobs the brain found — keep the good ones, reject the rest">
-        <span class="tab-label">⭐ Review</span><span class="tab-count" id="tab-review-count" hidden>0</span>
+        <span class="tab-icon" aria-hidden="true">⭐</span><span class="tab-label">Review</span>
+        <span class="tab-count" id="tab-review-count" hidden>0</span>
       </button>
-      <button id="tab-tracker" class="tab" type="button" aria-pressed="false"
-              title="Jobs you've applied to — your pipeline and stats">
-        <span class="tab-label">📊 Tracker</span>
-      </button>
-    </nav>
+    </div>
 
-    <!-- Tracker-only chrome (KPIs, charts, stale list): hidden in the Review tab and
+    <!-- Tracker-only chrome (KPIs, charts): hidden outside Tracker and
          when there are no applications yet, so a fresh scrape never shows empty charts. -->
     <div id="tracker-only">
     <section class="kpis" id="kpis"></section>
@@ -65,8 +70,9 @@
         <div class="chart-box"><canvas id="chart-source"></canvas></div>
       </div>
     </section>
+    </div><!-- /#tracker-only -->
 
-    <!-- Stale-application suggestions: still "Applied", no response, applied long ago -->
+    <!-- Applications-only suggestions: still "Applied", no response, applied long ago -->
     <section id="stale" class="stale-bar" aria-label="Applications to close out">
       <div class="stale-head">
         <span class="stale-title">
@@ -84,7 +90,6 @@
       <ul id="stale-list" class="stale-list"></ul>
       <p id="stale-empty" class="muted stale-empty" hidden>All up to date — nothing to close out 🎉</p>
     </section>
-    </div><!-- /#tracker-only -->
 
     <section class="list-controls">
       <input type="search" id="search" placeholder="Search company or role…" aria-label="Search">

@@ -96,6 +96,11 @@ def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
     (exit_code, notify_outcome) where outcome is 'new'/'none'/'failure', or None
     when no notification should fire (a dry run)."""
     print(f"Model: {conf.model}   Dashboard: {conf.dashboard_base}")
+    if not args.publish_only:
+        print(f"Candidate cap: judging up to {args.top} new posting(s) this run "
+              "(change with --top).")
+        print("Existing dashboard jobs and locally judged postings are skipped; "
+              "jobs left in Review stay visible until you apply or reject them.")
 
     # --publish-only: skip scraping/judging entirely and just flush the outbox
     # (results a previous run judged but couldn't publish).

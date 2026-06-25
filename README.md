@@ -1,5 +1,7 @@
 # JobScout
 
+**Current version:** v1.5 · See [CHANGELOG.md](CHANGELOG.md) for what changed.
+
 > A local-first job-search tool for macOS. A script finds jobs that
 > fit your preferences, then a local LLM *judges* job
 > postings against a profile you build in a first-run interview, and a local
@@ -116,18 +118,21 @@ Once you're set up, **make sure Ollama is running**, then double-click
 3. Opens the dashboard in your browser to review, and keeps it running until you
    press **Ctrl-C**.
 
-The dashboard has two tabs:
+The dashboard has three top-level views:
 
 - **⭐ Review** — the Potential jobs the search just found, waiting for your call.
   The count badge shows how many are left to triage. Keep the good ones by moving
   them to **Applied** (or any later status); **reject with a note** when one isn't
   right — that note teaches the next search to down-rank similar jobs, so matches
   improve over time.
-- **📊 Tracker** — every job you've applied to, with your stats and charts, tracked
+- **🏢 Applications** — the readable company/job list for everything you've kept,
+  with search, sort, filters, and status changes.
+- **📊 Tracker** — charts and summary stats for jobs you've applied to, tracked
   through its status lifecycle: Applied → In conversation → Interviewing → Offer → … .
 
 After a fresh search you'll land on **Review** (that's where the new jobs are); once
-you've triaged them, switch to **Tracker** to manage your pipeline.
+you've triaged them, use **Applications** for the day-to-day list and **Tracker**
+for the big-picture view.
 
 > Don't want to watch the terminal? Turn on [run notifications](#run-notifications)
 > and JobScout pings your phone when each run finishes.
@@ -142,6 +147,10 @@ need Ollama running.
 Search options are forwarded to the brain, for example `./2-search-jobs.command --dry-run`
 (judge without publishing) or `./2-search-jobs.command --top 10` (cap how many postings
 are judged).
+
+By default, one run judges up to 30 new candidates. Jobs already sitting in
+Review stay there until you either keep them or reject them, so seeing the same
+Review queue again is normal if you have not triaged it yet.
 
 > **Your results are never lost.** Each run writes its judged matches to a local
 > outbox *before* sending them to the dashboard. If the dashboard is unreachable,

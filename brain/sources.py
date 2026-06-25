@@ -167,8 +167,16 @@ def scrape_extra_locations(search, locations: list[str]) -> list[dict]:
         _warn(f"{len(locations)} extra locations given; searching only the first "
               f"{MAX_EXTRA_LOCATIONS} (raise MAX_EXTRA_LOCATIONS to change).")
         locations = locations[:MAX_EXTRA_LOCATIONS]
+    total_calls = len(locations) * len(search.queries) * len(JOBSPY_SITES)
+    if total_calls:
+        print(f"  Extra market plan: {len(locations)} location(s) × "
+              f"{len(search.queries)} search term(s) × {len(JOBSPY_SITES)} boards "
+              f"= {total_calls} board calls.", flush=True)
+        print(f"  JobScout waits {JOBSPY_PAUSE}s between board calls so the run may "
+              "take a while.", flush=True)
     out: list[dict] = []
-    for loc in locations:
+    for loc_i, loc in enumerate(locations, 1):
+        print(f"  Extra market {loc_i}/{len(locations)}: {loc}", flush=True)
         # Indeed's national domain comes from the entry itself, not the primary
         # country. Take the last non-empty comma segment ("Berlin, Germany" →
         # Germany; "Mexico," → Mexico; a bare entry is the country); never let a
@@ -222,6 +230,12 @@ def collect(search, extra_rss: list[str] | None = None,
     jobs: list[dict] = []
 
     print("=== JobSpy (Indeed + LinkedIn) ===", flush=True)
+    base_calls = len(search.queries) * len(JOBSPY_SITES)
+    print(f"  Search plan: {len(search.queries)} search term(s) × "
+          f"{len(JOBSPY_SITES)} boards = {base_calls} board calls.", flush=True)
+    if base_calls:
+        print(f"  Each board call asks for up to {RESULTS_WANTED} recent jobs; "
+              f"JobScout waits {JOBSPY_PAUSE}s between calls.", flush=True)
     for query in search.queries:
         for site in JOBSPY_SITES:
             jobs += scrape_jobspy(query, site, search.country, search.city, is_remote)
