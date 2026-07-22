@@ -4,7 +4,7 @@
 Flow:
   1. load config.json + profile.md
   2. ask the dashboard which links are already considered (+ past reject reasons)
-  3. scrape the default sources (JobSpy Indeed+LinkedIn, RemoteOK), dedup
+  3. scrape every enabled source in the registry (brain/sources/), dedup
   4. drop anything already on the dashboard OR already judged locally — BEFORE
      any LLM call, so no GPU is spent re-judging a decided posting
   5. cheap heuristic pre-filter -> top N candidates
@@ -19,10 +19,12 @@ dashboard is down/unreachable, the run's output is kept and retried automaticall
 on the next run (or immediately with --publish-only) — a failed publish never
 throws away judged work.
 
-Run:  python3 brain/run.py                (full run)
-      python3 brain/run.py --top 25       (cap candidates judged)
-      python3 brain/run.py --dry-run      (judge but don't publish)
-      python3 brain/run.py --publish-only (just flush held results, no scraping)
+Run:  python3 brain/run.py                 (full run)
+      python3 brain/run.py --top 25        (cap candidates judged)
+      python3 brain/run.py --dry-run       (judge but don't publish)
+      python3 brain/run.py --publish-only  (just flush held results, no scraping)
+      python3 brain/run.py --check-sources (scrape only: what each source really
+                                            returned; non-zero exit if degraded)
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import date
 
 _BRAIN_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_BRAIN_DIR)
@@ -55,8 +58,39 @@ DEFAULT_TOP = 30
 PUBLISH_BATCH = 500
 
 
-def _norm(url: str) -> str:
-    return (url or "").strip().rstrip("/")
+def _posting_text(job: dict, fetched: str | None) -> str:
+    """The ad text the judge reads: the board's own description FIRST, the fetched
+    page text appended as a supplement.
+
+    Order matters. This used to be `fetched or description`, which only asks "is the
+    fetch non-empty?" — so a JS-rendered board that serves nothing but page chrome
+    ("<title> | Jobs By Workable") still won, and jobs were judged on 80 characters
+    of chrome instead of the real ad. Not "the longer of the two" either: some job
+    pages extract to thousands of characters of cookie banner + "similar jobs"
+    footer and would beat any real description on length. The description is the
+    board's structured summary of THIS ad, so it leads; the page text can only add.
+    Both are untrusted posting text either way, so concatenating changes no trust
+    boundary."""
+    parts = [p for p in (job.get("description"), fetched) if p]
+    return "\n\n".join(parts)[:fetch.MAX_PAGE_TEXT_CHARS]
+
+
+def _age_suffix(date_str: str | None, today: date | None = None) -> str:
+    """" · posted Nd ago" when the row's date parses, else "" (fail-soft).
+
+    Applying within the first days of a posting measurably raises response
+    rates, so freshness belongs on the dashboard row where jobs get triaged.
+    Board dates are untrusted text in many shapes; only an ISO YYYY-MM-DD prefix
+    is accepted — anything else means no suffix, never a wrong one. A future
+    date (a board's timezone skew) clamps to "today". Must stay a SUFFIX so the
+    note still starts with the machine-verdict shape dashboard.user_feedback
+    recognises."""
+    try:
+        posted = date.fromisoformat((date_str or "").strip()[:10])
+    except ValueError:
+        return ""
+    days = max(((today or date.today()) - posted).days, 0)
+    return " · posted today" if days == 0 else f" · posted {days}d ago"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -68,6 +102,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--publish-only", action="store_true",
                     help="don't scrape/judge — just push any results held from a "
                          "previous run that couldn't reach the dashboard")
+    ap.add_argument("--check-sources", action="store_true",
+                    help="run every enabled source and report what each actually "
+                         "returned, then exit — no judging, no publishing. Exits "
+                         "non-zero if any source looks degraded.")
     args = ap.parse_args(argv)
 
     try:
@@ -77,6 +115,16 @@ def main(argv: list[str] | None = None) -> int:
         # notify with, so just report and exit.
         print(f"Config error: {e}", file=sys.stderr)
         return 2
+
+    # Source health check: scrape everything, report what each source produced,
+    # exit. A dead board does not raise — it just yields less — so the only way
+    # to see one is to count. No model calls, so it's safe to run whenever a run
+    # feels thin (it IS a full scrape, so it takes the scrape's time).
+    if args.check_sources:
+        sources.collect(conf)
+        print()
+        print(sources.health_summary())
+        return 1 if sources.degraded() else 0
 
     # One notification at the end covers every exit: a thrown error sends the
     # failure template, a clean finish sends new/none. `outcome` is None for a
@@ -125,21 +173,37 @@ def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
         print("Dashboard exclusion empty or unreachable — proceeding without it.")
 
     # 3. source + dedup
-    raw = sources.collect(conf.search, conf.extra_rss, conf.extra_jobspy_locations)
+    raw = sources.collect(conf)
     print(f"\nRaw results: {len(raw)}")
+    # Which sources actually pulled their weight — printed right next to the
+    # count it explains. A source that quietly returns nothing (a retired feed
+    # URL, a renamed API field) is otherwise invisible: the run just looks like
+    # a thin day.
+    print(sources.health_summary())
     if not raw:
         print("No jobs collected from any source.", file=sys.stderr)
         return 1, "failure"
     jobs = sources.deduplicate(raw)
     print(f"After dedup: {len(jobs)}")
 
-    # 4. exclude already-considered (dashboard) + already-judged (local state)
+    # 4. exclude already-considered (dashboard) + already-judged (local state) +
+    #    positions already on the dashboard under ANY status. Boards re-post the
+    #    same job under fresh URLs, so dash.position_blocked matches (company,
+    #    title) FUZZILY against the map exclusion() built. Link matching is
+    #    normalize_url'd on BOTH sides so tracking-param variants still match.
     scored = state.load_scored()
     before = len(jobs)
+
+    def _blocked_position(j: dict) -> bool:
+        return dash.position_blocked(excl.blocked_positions,
+                                     j.get("company", ""), j.get("title", ""))
+
     jobs = [j for j in jobs
-            if _norm(j.get("url", "")) not in excl.links
-            and not state.already_scored(j, scored)]
-    print(f"Excluded already-known/judged: {before - len(jobs)}; remaining: {len(jobs)}")
+            if dash.normalize_url(j.get("url", "")) not in excl.links
+            and not state.already_scored(j, scored)
+            and not _blocked_position(j)]
+    print(f"Excluded already-known/judged/known-position: {before - len(jobs)}; "
+          f"remaining: {len(jobs)}")
     if not jobs:
         print("Nothing new to judge.")
         return 0, "none"
@@ -156,7 +220,7 @@ def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
     with_text = 0
     for j in candidates:
         text = fetch.fetch_posting_text_cached(j["url"]) if j.get("url") else None
-        j["_posting_text"] = (text or j.get("description") or "")[:fetch.MAX_PAGE_TEXT_CHARS]
+        j["_posting_text"] = _posting_text(j, text)
         if text:
             with_text += 1
     print(f"Full text fetched: {with_text}/{len(candidates)}")
@@ -164,6 +228,21 @@ def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
     # 7. judge (+ optional CV-fit scoring of survivors)
     judge = Judge(conf.model, conf.ollama_base, conf.profile_text, excl.rejection_reasons)
     cv_scorer = _build_cv_scorer(conf)
+
+    # Midpoint heartbeat: the scrape is done, the long judging pass is next.
+    # Probe the model (this also warms it into memory) and send the halfway
+    # ping. A probe failure only WARNS — we still attempt to judge so any real
+    # error surfaces per-job.
+    if judge.warmup():
+        print("Judge model is up — judging now.")
+        if not args.dry_run:
+            notify.notify_run(conf.ntfy, "progress")
+    else:
+        print("! Judge model did not respond to the warm-up probe — judging may "
+              "fail. Is Ollama running?", file=sys.stderr)
+        if not args.dry_run:
+            notify.notify_run(conf.ntfy, "warmup_failed")
+
     survivors: list[dict] = []
     rejects: list[dict] = []
     errors = 0
@@ -193,6 +272,8 @@ def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
                     note += f"  |  CV-fit {cv['score']}/100"
                     if cv["gaps"]:
                         note += f" (gaps: {cv['gaps']})"
+            # Freshness LAST, so the note keeps its machine-verdict prefix.
+            note += _age_suffix(j.get("date"))
             survivors.append({
                 "Company": j.get("company", ""),
                 "Role": j.get("title", ""),
@@ -202,6 +283,18 @@ def _run_pipeline(conf: "cfg.Config", args) -> tuple[int, str | None]:
 
     print(f"\nJudged {len(candidates)}: {len(survivors)} survivors, "
           f"{len(rejects)} rejected, {errors} errors.")
+    if errors == len(candidates):
+        print("! Every judge call failed; no candidates were decided.", file=sys.stderr)
+        return 1, (None if args.dry_run else "failure")
+
+    # Repeat the degraded-source verdict at the END, where the eye lands: the
+    # health table above scrolls away behind the judging pass, and a broken
+    # source only reported off-screen is a bug nobody acts on.
+    bad = sources.degraded()
+    if bad:
+        print(f"! {len(bad)} source(s) degraded this run "
+              f"({', '.join(h['label'] for h in bad)}) — see \"Source health\" above, "
+              f"or re-check with: brain/run.py --check-sources", file=sys.stderr)
 
     # 8. publish (durably). Persist the outbox and publish BEFORE marking anything
     # scored: a posting must never be recorded as "already judged" (and so skipped

@@ -53,13 +53,16 @@ class TestParseNtfy(unittest.TestCase):
 
 
 class TestTemplates(unittest.TestCase):
-    def test_three_fixed_templates(self):
-        self.assertEqual(set(N.TEMPLATES), {"new", "none", "failure"})
+    def test_five_fixed_templates(self):
+        self.assertEqual(set(N.TEMPLATES),
+                         {"progress", "warmup_failed", "new", "none", "failure"})
 
     def test_template_selection(self):
         self.assertIn("new potential jobs", N.template("new"))
         self.assertIn("no new matches", N.template("none"))
         self.assertIn("run failed", N.template("failure"))
+        self.assertIn("judging candidates now", N.template("progress"))
+        self.assertIn("didn't respond", N.template("warmup_failed"))
 
     def test_unknown_kind_is_none(self):
         self.assertIsNone(N.template("bogus"))

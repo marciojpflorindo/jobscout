@@ -121,5 +121,26 @@ class TestJudgePromptComposition(unittest.TestCase):
         self.assertIn("adtech", j.system)
 
 
+class TestWarmup(unittest.TestCase):
+    """The pre-judging probe: True when the model answers, False (never raise)
+    when Ollama is down — the caller warns and still attempts to judge."""
+
+    def test_true_when_model_answers(self):
+        j = J.Judge("m", "http://127.0.0.1:11434", "p", [])
+        j._call_ollama = lambda user: "ok"
+        self.assertTrue(j.warmup())
+
+    def test_false_when_transport_fails(self):
+        import urllib.error
+
+        j = J.Judge("m", "http://127.0.0.1:11434", "p", [])
+
+        def boom(user):
+            raise urllib.error.URLError("connection refused")
+
+        j._call_ollama = boom
+        self.assertFalse(j.warmup())
+
+
 if __name__ == "__main__":
     unittest.main()

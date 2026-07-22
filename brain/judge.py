@@ -69,6 +69,20 @@ class Judge:
             payload = json.load(resp)
         return payload.get("message", {}).get("content", "") if isinstance(payload, dict) else ""
 
+    def warmup(self) -> bool:
+        """Prove Ollama answers and the model loads BEFORE the judging pass.
+
+        A stopped Ollama or a missing model is the failure that wastes the whole
+        scrape — without this it only surfaces per-job, after the boards have
+        already been walked. The probe also pulls the model into memory, so the
+        first real judgment isn't the slow one. Failure only warns upstream: the
+        run still attempts to judge so the real error surfaces."""
+        try:
+            self._call_ollama("Reply with the single word: ok")
+            return True
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return False
+
     def judge(self, job: dict) -> dict | None:
         """Judge one job. Returns a validated verdict dict, or None on hard
         failure (after one retry) so the caller can count it and move on."""
