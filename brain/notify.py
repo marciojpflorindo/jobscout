@@ -3,9 +3,9 @@
 An ntfy topic is PUBLIC: anyone who knows the topic name sees every message sent
 to it, with no authentication. The only protection is an unguessable topic. So a
 notification body is NEVER allowed to carry anything personal — no job title,
-company, URL, profile field, count, or raw error string. The three fixed
-templates below are the ONLY bodies ever sent, and the new-vs-none distinction
-is a binary, not a count.
+company, URL, profile field, count, or raw error string. The fixed templates
+below are the ONLY bodies ever sent, and the new-vs-none distinction is a
+binary, not a count.
 
 The POST can never fail the run: every path returns cleanly (a notification is a
 courtesy, not a result). Only http/https with a hard timeout is allowed. Enabled
@@ -22,8 +22,12 @@ from urllib.parse import urlparse
 
 NOTIFY_TIMEOUT = 10  # seconds; the POST must never hang the end of a run
 
-# The ONLY bodies ever sent on a run finishing. Generic by design.
+# The ONLY bodies ever sent. Generic by design. "progress"/"warmup_failed" fire
+# at the run's midpoint (scrape done, long judging pass next); the rest at the end.
 TEMPLATES = {
+    "progress": "🔎 JobScout: search finished — judging candidates now.",
+    "warmup_failed": ("⚠️ JobScout: the local model didn't respond after the "
+                      "search — judging may fail. Check that Ollama is running."),
     "new": "✅ JobScout finished — new potential jobs to review. Open your dashboard.",
     "none": "✅ JobScout finished — no new matches this run.",
     "failure": "⚠️ JobScout run failed — check the terminal/log.",

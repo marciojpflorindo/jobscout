@@ -7,6 +7,7 @@ persisted to brain/state/pending.json before the network call, kept on failure
 
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -146,8 +147,72 @@ class _FakeJudge:
     def __init__(self, *a, **k):
         pass
 
+    def warmup(self):
+        return True
+
     def judge(self, job):
         return {"verdict": "match", "score": 90, "why": "good fit"}
+
+
+class _FailingJudge(_FakeJudge):
+    def judge(self, job):
+        return None
+
+
+class TestPostingText(unittest.TestCase):
+    """The judge must read the board's description FIRST; the fetched page is a
+    supplement. A chrome-only fetch ("… | Jobs By Workable") must never displace
+    the real ad text."""
+
+    def test_description_leads_fetched_appends(self):
+        job = {"description": "Real ad: build data pipelines for the platform."}
+        text = run._posting_text(job, "Acme | Jobs By Workable")
+        self.assertTrue(text.startswith("Real ad: build data pipelines for the platform."))
+        self.assertIn("Jobs By Workable", text)
+
+    def test_chrome_only_fetch_does_not_win(self):
+        # The old `fetched or description` bug: any non-empty fetch won outright.
+        job = {"description": "Real ad text"}
+        self.assertTrue(run._posting_text(job, "chrome").startswith("Real ad text"))
+
+    def test_fetched_alone_when_no_description(self):
+        self.assertEqual(run._posting_text({}, "page text"), "page text")
+
+    def test_description_alone_when_fetch_failed(self):
+        self.assertEqual(run._posting_text({"description": "d"}, None), "d")
+
+    def test_empty_both(self):
+        self.assertEqual(run._posting_text({}, None), "")
+
+    def test_capped(self):
+        job = {"description": "a" * run.fetch.MAX_PAGE_TEXT_CHARS}
+        text = run._posting_text(job, "b" * 100)
+        self.assertEqual(len(text), run.fetch.MAX_PAGE_TEXT_CHARS)
+
+
+class TestAgeSuffix(unittest.TestCase):
+    """Freshness note: ISO dates only, fail-soft, future dates clamp to today."""
+
+    TODAY = date(2026, 7, 22)
+
+    def test_days_ago(self):
+        self.assertEqual(run._age_suffix("2026-07-19", self.TODAY), " · posted 3d ago")
+
+    def test_same_day(self):
+        self.assertEqual(run._age_suffix("2026-07-22", self.TODAY), " · posted today")
+
+    def test_iso_prefix_of_a_longer_timestamp(self):
+        self.assertEqual(run._age_suffix("2026-07-21T09:30:00+00:00", self.TODAY),
+                         " · posted 1d ago")
+
+    def test_future_date_clamps_to_today(self):
+        # A board's timezone skew must never produce "posted -1d ago".
+        self.assertEqual(run._age_suffix("2026-07-23", self.TODAY), " · posted today")
+
+    def test_unparseable_dates_mean_no_suffix_never_a_wrong_one(self):
+        for bad in ("", None, "Fri, 18 Jul 2026 09:30:15 +0000", "soon", "22/07/2026"):
+            with self.subTest(date=repr(bad)):
+                self.assertEqual(run._age_suffix(bad, self.TODAY), "")
 
 
 class TestPipelineOrdering(unittest.TestCase):
@@ -216,6 +281,14 @@ class TestPipelineOrdering(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIsNone(outcome)
         self.assertEqual(self.order, [])  # no publish, no scored pollution
+        self.assertFalse(ST.SCORED_FILE.exists())
+
+    def test_every_judge_call_failing_reports_run_failure(self):
+        run.Judge = _FailingJudge
+        args = SimpleNamespace(top=30, dry_run=False, publish_only=False)
+        rc, outcome = run._run_pipeline(self._conf(), args)
+        self.assertEqual((rc, outcome), (1, "failure"))
+        self.assertEqual(self.order, [])
         self.assertFalse(ST.SCORED_FILE.exists())
 
 

@@ -1,6 +1,6 @@
 # JobScout
 
-**Current version:** v1.5 · See [CHANGELOG.md](CHANGELOG.md) for what changed.
+**Current version:** v1.6 · See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 > A local-first job-search tool for macOS. A script finds jobs that
 > fit your preferences, then a local LLM *judges* job
@@ -14,10 +14,11 @@
 
 JobScout has three local parts:
 
-1. **The brain** — scrapes job boards (Indeed + LinkedIn via JobSpy, plus
-   RemoteOK), fetches each posting's full text, and has a local Ollama model
-   judge it against your profile (a verdict + a 0–100 score). Good matches are
-   published to your dashboard.
+1. **The brain** — scrapes nine job boards (Indeed + LinkedIn via JobSpy, plus
+   seven remote-job boards over their public APIs/feeds — see "Job boards"
+   below), fetches each posting's full text, and has a local Ollama model judge
+   it against your profile (a verdict + a 0–100 score). Good matches are
+   published to your dashboard with a "posted N days ago" freshness note.
 2. **The dashboard** — a local web app to review found jobs and track every
    application through its status lifecycle (Potential → Applied → Interviewing →
    Offer → … ). Rejecting a job with a note teaches the brain to down-rank
@@ -215,11 +216,55 @@ After each run you'll get one of three generic messages: *new jobs to review*,
 > when onboarding asks. To change or disable notifications, re-run onboarding with
 > `./2-search-jobs.command --setup`.
 
+## Job boards
+
+Out of the box, the brain searches every built-in board — no configuration
+needed:
+
+| Board | Kind | What it covers |
+|---|---|---|
+| Indeed | JobSpy scrape | Your profile's country/city + any extra locations |
+| LinkedIn | JobSpy scrape | Your profile's country/city + any extra locations |
+| RemoteOK | Public API | Global remote, tech-skewed |
+| Arbeitnow | Public API | Europe-focused remote |
+| Remotive | Public API | Large general remote board |
+| Jobicy | Public API | Remote, with salary/geo metadata |
+| Himalayas | Public API | Large remote aggregator |
+| Working Nomads | Public API | Large general remote board |
+| We Work Remotely | RSS feed | Major remote board |
+
+Every board is optional. To turn one off, add a `sources` block to `config.json`
+with only the overrides (unlisted boards stay on; use JSON `true`/`false`
+without quotes):
+
+```json
+{
+  "sources": { "remoteok": false, "linkedin": false }
+}
+```
+
+An unknown key or a quoted `"false"` stops the run with a clear message rather
+than being silently ignored. The API/RSS boards return their newest postings
+regardless of your search terms — the judge is what filters them down to your
+profile, so expect the raw scrape count to look big.
+
+**Source health.** A dead board usually doesn't error — it just quietly returns
+nothing (a retired feed URL serves an HTML page with a 200; an API renames a
+field). Every run prints a per-source health table, and a source producing no
+usable rows (or rows with no company names) is flagged as DEGRADED. To check the
+boards without judging or publishing anything:
+
+```bash
+.venv/bin/python brain/run.py --check-sources
+```
+
+It runs the full scrape, prints the table, and exits non-zero if anything looks
+broken.
+
 ## Advanced: extra job sources
 
-Out of the box, the brain searches Indeed + LinkedIn (via JobSpy, using your
-profile's country/city/queries) and RemoteOK. You can broaden coverage by adding
-your own sources to `config.json` (written by onboarding, gitignored). Two slots:
+You can broaden coverage further by adding your own sources to `config.json`
+(written by onboarding, gitignored). Two slots:
 
 ```json
 {
@@ -233,8 +278,8 @@ your own sources to `config.json` (written by onboarding, gitignored). Two slots
   this for you; you can also hand-edit it. Each entry is searched with all of your
   profile's queries on Indeed + LinkedIn, and each gets its **own** Indeed national
   domain — the part after the last comma, so `"Berlin, Germany"` searches Germany's
-  Indeed and a bare `"Mexico"` searches Mexico's. (RemoteOK is global-remote and
-  always included, regardless of location.) Job boards don't accept `"EU"` as a
+  Indeed and a bare `"Mexico"` searches Mexico's. (The API/RSS boards are
+  global-remote and unaffected by locations.) Job boards don't accept `"EU"` as a
   place, so the shortcut **`"EU"`** (or `"Europe"`) expands to the member countries
   they *do* accept. Heads-up: a region is many countries × your queries × two
   boards, so it makes a run noticeably longer.

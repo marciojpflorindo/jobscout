@@ -38,7 +38,7 @@ def _clip(v, n):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "JobScout/1.5"
+    server_version = "JobScout/1.6"
 
     # Quieter logging: one line per request, no client noise to stderr spam.
     def log_message(self, fmt, *args):
@@ -313,14 +313,23 @@ class Handler(BaseHTTPRequestHandler):
         rows = STORE.get_rows()
         ledger = STORE.get_rejected()
         exclude = {}
+        no_link = []  # rows without a URL still teach the brain their position
         for r in rows:
             link = (r.get("Job link") or "").strip()
-            if link and link not in exclude:
-                exclude[link] = {
-                    "link": link,
-                    "status": _clip(r.get("Status"), 40),
-                    "why": _clip(r.get("Notes"), 500),
-                }
+            entry = {
+                "link": link,
+                "status": _clip(r.get("Status"), 40),
+                "why": _clip(r.get("Notes"), 500),
+                # company/title let the brain block a known POSITION even
+                # when a board re-posts it under a fresh URL.
+                "company": _clip(r.get("Company"), 200),
+                "title": _clip(r.get("Role"), 200),
+            }
+            if link:
+                if link not in exclude:
+                    exclude[link] = entry
+            elif entry["company"] or entry["title"]:
+                no_link.append(entry)
         for link, entry in ledger.items():
             key = (link or "").strip()
             if key and key not in exclude:
@@ -328,8 +337,9 @@ class Handler(BaseHTTPRequestHandler):
                     "link": key,
                     "status": "no",
                     "why": _clip(entry.get("reason") if isinstance(entry, dict) else "", 500),
+                    "source": _clip(entry.get("source") if isinstance(entry, dict) else "", 40),
                 }
-        return self._send_json(200, {"exclude": list(exclude.values())})
+        return self._send_json(200, {"exclude": list(exclude.values()) + no_link})
 
     # --- API: reject (append model `no` verdicts to the ledger) -----------
     def _api_reject(self):

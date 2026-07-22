@@ -68,10 +68,16 @@ class Config:
     extra_jobspy_locations: list[str]
     profile_text: str
     ntfy: Ntfy | None = None
+    # Per-source overrides from the optional `sources` block. Sources default ON:
+    # only keys the user explicitly set appear here.
+    sources: dict[str, bool] = field(default_factory=dict)
 
     @property
     def dashboard_base(self) -> str:
         return f"http://127.0.0.1:{self.dashboard_port}"
+
+    def source_on(self, name: str) -> bool:
+        return self.sources.get(name, True)
 
 
 def _str_list(raw) -> list[str]:
@@ -94,6 +100,35 @@ def parse_ntfy(raw) -> Ntfy | None:
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return None
     return Ntfy(server=server.rstrip("/"), topic=topic, enabled=True)
+
+
+def _source_toggles(raw) -> dict[str, bool]:
+    """Validate the optional `sources` block: {"remoteok": false, ...}.
+
+    Every built-in board defaults ON, so a config written before a board existed
+    (or with no block at all) still searches everything — the block only carries
+    the user's explicit overrides. An unknown key or a non-boolean value is a
+    config mistake and fails loudly rather than being silently ignored.
+    """
+    if raw is None:
+        return {}
+    # Imported here, not at module top: sources' adapters import fetch, which
+    # imports this module for STATE_DIR — a top-level import would be circular.
+    from sources.registry import SOURCE_KEYS
+    if not isinstance(raw, dict):
+        raise ConfigError("config.json 'sources' must be an object of boolean toggles.")
+    unknown = sorted(set(raw) - SOURCE_KEYS)
+    if unknown:
+        raise ConfigError(
+            f"config.json 'sources' has unknown key(s): {', '.join(unknown)}. "
+            f"Supported: {', '.join(sorted(SOURCE_KEYS))}.")
+    toggles: dict[str, bool] = {}
+    for key, value in raw.items():
+        if not isinstance(value, bool):
+            raise ConfigError(
+                f"config.json 'sources.{key}' must be true or false (no quotes).")
+        toggles[key] = value
+    return toggles
 
 
 def load() -> Config:
@@ -153,4 +188,5 @@ def load() -> Config:
         extra_jobspy_locations=_str_list(raw.get("extra_jobspy_locations")),
         profile_text=profile_text,
         ntfy=parse_ntfy(raw.get("ntfy")),
+        sources=_source_toggles(raw.get("sources")),
     )

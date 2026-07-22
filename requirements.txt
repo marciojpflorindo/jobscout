@@ -2,6 +2,9 @@
 # The dashboard and onboarding are stdlib-only; only the brain needs these.
 python-jobspy==1.1.82
 requests==2.34.2
+# The SSRF-guarded fetcher (brain/fetch.py) drives urllib3 directly to pin
+# connections to validated IPs; pinned explicitly since it's a direct import.
+urllib3==2.7.0
 beautifulsoup4==4.15.0
 # Optional CV-fit scoring (ats/): pure-Python PDF text extraction. TXT/MD/DOCX
 # CVs need no dependency — only PDF CVs use this.
